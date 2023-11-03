@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wochenkalender - Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+
+        .form-signin {
+            max-width: 330px;
+            padding: 1rem;
+        }
+
+        .form-signin .form-floating:focus-within {
+            z-index: 2;
+        }
+
+        .form-signin input[type="email"] {
+            margin-bottom: -1px;
+        }
+
+        .form-signin input[type="password"] {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body class="d-flex align-items-center py-4 bg-body-tertiary">
+    <main class="form-signin w-100 m-auto">
+        <form>
+            <h1 class="h3 mb-1 fw-normal">Login</h1>
+            <h6 style="opacity: 0.7;font-size: small;">Demo, kein Backend.</h6>
+
+            <div id="Messages" style="margin-bottom: 10px;">
+
+            </div>
+            <div id="curloginview" class="form">
+                <label for="floatingInput">Email Adresse</label>
+                <input style="margin-bottom:10px" type="email" class="form-control" id="floatingInput"
+                    placeholder="...@student.hs-rm.de">
+
+            </div>
+
+
+
+            <button class="btn btn-primary w-100 py-2" id="nextbtn">Weiter</button>
+            <p class="mt-5 mb-3 text-body-secondary">© 2023</p>
+        </form>
+    </main>
+    <script>
+        var step = 0;
+        var newhere = true;
+        var mail = "";
+        document.getElementById('nextbtn').addEventListener('click', function (event) {
+            event.preventDefault();
+            var curfed = document.getElementById('feedback-message');
+            if (curfed != null) {
+                curfed.remove();
+            }
+            var emailInput = document.getElementById('floatingInput');
+            var email = mail == "" ? emailInput.value : mail;
+            var feedbackMessage = document.createElement('div');
+            var nextbtn = document.getElementById('nextbtn');
+            var messages = document.getElementById('Messages');
+
+
+            feedbackMessage.style.marginTop = '1rem';
+            feedbackMessage.setAttribute('id', 'feedback-message');
+
+            // Überprüfen, ob die E-Mail-Adresse gültig ist
+            if (!email.includes('@') || !email.includes('.') || !email.includes('student.hs-rm.de')) {
+                feedbackMessage.textContent = 'Bitte gebe eine gültige E-Mail-Adresse ein.';
+                if (!email.includes('student.hs-rm.de')) {
+                    feedbackMessage.textContent = 'Du musst eine gültige studentische E-Mail-Adresse der Hochschule RheinMain angeben.';
+                }
+
+
+                feedbackMessage.classList.add('alert', 'alert-danger');
+                emailInput.classList.add('is-invalid');
+                // focus the input field
+                emailInput.focus();
+
+            } else {
+                if (step == 0) {
+                    mail = document.getElementById('floatingInput').value;
+                    step++;
+                    var loginform = document.getElementById('curloginview');
+                    loginform.innerHTML = "";
+
+                    if (newhere) {
+                        messages.innerHTML = "";
+                        var welcomeMessage = document.createElement('div');
+                        welcomeMessage.innerHTML = 'Neu hier? Bitte Suche dir ein Passwort für dein Konto aus.';
+                        messages.appendChild(welcomeMessage);
+                    }
+
+
+
+                    var passwordInput = document.createElement('input');
+                    passwordInput.setAttribute('type', 'password');
+                    passwordInput.setAttribute('id', 'floatingPassword');
+                    passwordInput.classList.add('form-control');
+                    passwordInput.classList.add('mb-3');
+                    var passwordLabel = document.createElement('label');
+                    passwordLabel.setAttribute('for', 'floatingPassword');
+                    passwordLabel.textContent = 'Passwort';
+                    loginform.appendChild(passwordLabel);
+                    loginform.appendChild(passwordInput);
+                    passwordInput.focus();
+
+                    document.getElementById('nextbtn').innerHTML = "Login";
+                    feedbackMessage.innerHTML = 'Bitte gib dein Passwort ein.';
+
+
+                    if (newhere) {
+                        nextbtn.innerText = "Registrieren";
+                        nextbtn.disabled = true;
+                        var passwordInput2 = document.createElement('input');
+                        passwordInput2.setAttribute('type', 'password');
+                        passwordInput2.setAttribute('id', 'floatingPassword2');
+                        passwordInput2.classList.add('form-control');
+                        var passwordLabel2 = document.createElement('label');
+                        passwordLabel2.setAttribute('for', 'floatingPassword2');
+                        passwordLabel2.textContent = 'Passwort wiederholen';
+                        loginform.appendChild(passwordLabel2);
+                        loginform.appendChild(passwordInput2);
+
+                        var passwordSecurity = document.createElement('div');
+                        passwordSecurity.setAttribute('id', 'passwordSecurity');
+                        passwordSecurity.classList.add('form-text');
+                        passwordSecurity.classList.add('text-muted');
+                        passwordSecurity.innerHTML = 'Dein Passwort muss mindestens 8 Zeichen lang sein.';
+                        loginform.appendChild(passwordSecurity);
+                        var repeatchanged = false;
+                        var checkPW = function () {
+
+                            var action = "valid";
+
+                            if (passwordInput.value == passwordInput2.value && passwordInput.value.length > 7) {
+
+
+
+                            } else {
+                                if (!repeatchanged) {
+                                    action = "notready";
+                                } else {
+                                    action = "notsame";
+
+                                }
+                            }
+                            if (action == "notsame") {
+                                passwordInput2.classList.add('is-invalid');
+                                passwordInput2.classList.remove('is-valid');
+                                nextbtn.disabled = true;
+                            } else if (action == "valid") {
+                                passwordInput2.classList.add('is-valid');
+                                passwordInput2.classList.remove('is-invalid');
+                                repeatchanged = true;
+                                nextbtn.disabled = false;
+                            }
+                        }
+                        passwordInput2.addEventListener('keyup', checkPW);
+                        passwordInput.addEventListener('keyup', checkPW);
+
+                        // if password repeat loss focus
+                        passwordInput2.addEventListener('focusout', function () {
+                            repeatchanged = true;
+                            if (passwordInput.value == passwordInput2.value) {
+                                passwordInput2.classList.add('is-valid');
+                                passwordInput2.classList.remove('is-invalid');
+                                nextbtn.disabled = false;
+                            } else {
+                                passwordInput2.classList.add('is-invalid');
+                                passwordInput2.classList.remove('is-valid');
+                                nextbtn.disabled = true;
+
+                            }
+                        });
+                    }
+
+
+                    return;
+                }
+
+
+
+                if (emailInput != null) {
+                    emailInput.classList.remove('is-invalid');
+                    emailInput.classList.add('is-valid');
+                }
+                if (newhere) {
+                    feedbackMessage.innerHTML = 'Ein Freischaltlink wurde an deine Mailadresse gesendet. Bitte überprüfe deine E-Mails und folge den Anweisungen, um dein Konto zu aktivieren. <a href="https://webmail.hs-rm.de/owa/#path=/mail">Zur HS-Mail</a>';
+                    nextbtn.style.display = "none";
+                    document.getElementById('curloginview').style.display = 'none';
+                    messages.innerHTML = "";
+                } else {
+                    // Redirect to index.html
+                    window.location.href = "index.html";
+                }
+
+
+
+                document.getElementById('curloginview').style.display = 'none';
+
+                feedbackMessage.classList.add('alert', 'alert-success');
+            }
+
+            var existingFeedback = document.getElementById('feedback-message');
+            if (existingFeedback) {
+                existingFeedback.replaceWith(feedbackMessage);
+            } else {
+                document.querySelector('form').insertBefore(feedbackMessage, document.querySelector('#nextbtn').nextSibling);
+            }
+        });
+        document.getElementById('floatingInput').focus();
+
+
+    </script>
+
+
+
+</body>
+
+
+<!--<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+    crossorigin="anonymous"></script> -->
+<script>
+    // JavaScript-Logik hier einfügen
+</script>
+</body>
+
+</html>

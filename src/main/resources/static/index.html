@@ -1,25 +1,287 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-bs-theme="dark">
 
 <head>
-    <meta charset='utf-8'>
-    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
-    <title>Page Title</title>
-    <meta name='viewport' content='width=device-width, initial-scale=1'>
-    <link rel='stylesheet' type='text/css' media='screen' href='main.css'>
-    <script src='main.js'></script>
+    <meta charset=" UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wochenkalender</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+
 </head>
 
 <body>
-    <h1>Work in progress</h1>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+        crossorigin="anonymous"></script>
 
-    <p id="contentfromhello"></p>
+
+    <nav class="navbar navbar-expand-sm bg-dark sticky-top" data-bs-theme="dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Tauschbörse</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown"
+                aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNavDropdown">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="#">Startseite</a>
+                    </li>
+
+                    <li class="nav-item" id="loginbtn">
+                        <a class="nav-link" href="login.html">Login</a>
+                    </li>
+
+
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <style>
+        .week-calendar {
+            display: grid;
+            grid-template-columns: 50px repeat(5, 1fr);
+            /* Platz für die Zeitskala */
+            gap: 5px;
+            max-width: 1000px;
+            width: 1000px;
+        }
+
+        .time-scale {
+            height: 600px;
+            position: relative;
+        }
+
+        .time-scale div {
+            position: absolute;
+            width: 100%;
+            font-size: 1em;
+            text-align: right;
+            padding-right: 10px;
+        }
+
+        .day {
+            position: relative;
+            padding-top: 25px;
+            border: 1px solid #ccc;
+            height: 600px;
+        }
+
+        .day-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            text-align: center;
+        }
+
+        .item-title {
+            font-size: 1em;
+        }
+
+        .item {
+            position: absolute;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid black;
+            z-index: 1;
+            overflow: hidden;
+            max-width: 80px;
+            width: auto;
+            min-width: 80px;
+            font-size: 12px;
+        }
+
+        .title-line {
+            margin: 0;
+            border: 0;
+            border-top: 1px solid black;
+            width: 100%;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+
+        }
+
+        .item-subtext {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+    </style>
+
+
+    <div style="padding:10px;" class="container">
+        <h1>Wochenkalender</h1>
+        <div class="accordion" id="accordionExample">
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+                        Zeitplan
+                    </button>
+                </h2>
+                <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#accordionExample">
+                    <div class="accordion-body">
+                        <div class="week-calendar" id="weekCalendar"></div>
+                        <br>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
     <script>
-        var elem = document.getElementById("contentfromhello");
-        fetch("http://localhost:8080/hello?name=to you!")
-            .then(response => response.text())
-            .then(data => elem.innerHTML = data);
+        (function () {
+            const days = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
+            const startHour = 7;  // 8:00 Uhr
+            const endHour = 20;   // 21:00 Uhr
+
+            const items = {
+                'Montag': [
+                    { title: 'CG (V)', subtext: '', color: 'cyan', start: '11:45', end: '13:15' }
+                ],
+                'Dienstag': [],
+                'Mittwoch': [
+                    { title: 'Recht (V)', subtext: '', color: 'cyan', start: '08:15', end: '09:45' },
+                    { title: 'BS (V)', subtext: '', color: 'cyan', start: '10:00', end: '11:30' },
+                    { title: 'CG (P-F)', subtext: 'F', color: '#ffb74d', start: '14:15', end: '15:45' },
+                    { title: 'SWT (P-D)', subtext: 'D', color: '#ffb74d', start: '16:00', end: '17:30' }
+                ],
+                'Donnerstag': [
+                    { title: 'SWT (V)', subtext: '', color: 'cyan', start: '08:15', end: '09:45' },
+                    { title: 'SWT (S-A)', subtext: '', color: '#4caf50', start: '10:00', end: '11:30' },
+                    { title: 'BS (P-B)', subtext: 'B', color: 'orange', start: '16:00', end: '17:30' }
+                ],
+                'Freitag': [
+                    { title: 'Recht (Ü)', subtext: '', color: 'lightgreen', start: '08:15', end: '09:45' },
+                    { title: 'StatWR (V)', subtext: '', color: 'cyan', start: '10:00', end: '11:30' },
+                    { title: 'StatWR (Ü-D)', subtext: 'D', color: 'lightgreen', start: '14:15', end: '15:45' }
+                ]
+            };
+
+
+            const calendarEl = document.getElementById('weekCalendar');
+
+            function timeToPosition(time) {
+                const [hours, minutes] = time.split(':').map(Number);
+                const totalHours = (hours - startHour) + (minutes / 60);
+                return (totalHours / (endHour - startHour)) * 100;
+            }
+
+            // Zeitskala hinzufügen
+            const timeScaleEl = document.createElement('div');
+            timeScaleEl.classList.add('time-scale');
+            for (let hour = startHour; hour <= endHour; hour++) {
+                for (let minute = 0; minute < 60; minute += 60) {
+                    if (hour === startHour && minute === 0) continue;  // 8:00 überspringen
+                    const timeDiv = document.createElement('div');
+                    timeDiv.textContent = `${hour}:${String(minute).padStart(2, '0')}`;
+                    timeDiv.style.top = `${timeToPosition(`${hour}:${minute}`)}%`;
+                    timeScaleEl.appendChild(timeDiv);
+                }
+            }
+            calendarEl.appendChild(timeScaleEl);
+
+            days.forEach(day => {
+                const dayEl = document.createElement('div');
+                dayEl.classList.add('day');
+                const dayHeader = document.createElement('div');
+                dayHeader.classList.add('day-header');
+                dayHeader.textContent = day;
+                dayEl.appendChild(dayHeader);
+                var samestart = 0;
+                var currentstart = 0;
+                (items[day] || []).forEach((item, index) => {
+                    const itemEl = document.createElement('div');
+                    itemEl.classList.add('item');
+                    itemEl.style.backgroundColor = item.color;
+
+                    if (currentstart == item.start) {
+                        samestart++;
+                    } else {
+                        samestart = 0;
+                    }
+                    currentstart = item.start;
+
+                    itemEl.innerHTML = `<strong class="item-title" style="background:${item.color}">${item.title}</strong><hr class="title-line"><div class="item-subtext">${item.subtext}</div>`;
+
+                    itemEl.style.top = `${timeToPosition(item.start)}%`;
+                    itemEl.style.height = `${timeToPosition(item.end) - timeToPosition(item.start)}%`;
+                    itemEl.style.left = `${samestart * 25}px`;
+
+                    itemEl.addEventListener('mouseover', function () {
+                        itemEl.style.maxWidth = "150px";
+                        itemEl.style.zIndex = 2;  // hervorheben
+                    });
+                    itemEl.addEventListener('mouseout', function () {
+                        itemEl.style.maxWidth = "80px";
+                        itemEl.style.zIndex = 1;  // zurücksetzen
+                    });
+                    itemEl.addEventListener('click', function () {
+                        alert(`Du hast auf ${item.title} am ${day} geklickt.`);
+                    });
+
+                    dayEl.appendChild(itemEl);
+                });
+
+                calendarEl.appendChild(dayEl);
+            });
+        })();
     </script>
+
+
+
+
+    <footer style="margin-top: 500px;">
+        <hr>
+        <div class="container p-4 pb-0">
+
+            <h6 class="text-uppercase">Links</h6>
+
+            <ul class="list-unstyled mb-0">
+                <li>
+                    <a href="#!" class="text">Impressum</a>
+                </li>
+                <li>
+                    <a href="#!" class="text">FAQ</a>
+                </li>
+                <li>
+                    <a href="#!" class="text">Datenschutz</a>
+                </li>
+                <li>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckDefault">
+                        <label class="form-check-label" for="flexSwitchCheckDefault">Darkmode</label>
+                        <script>
+                            var darkmodeActive = localStorage.getItem('darkmode') === 'true' || (!('darkmode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+                            document.getElementsByTagName('html')[0].setAttribute('data-bs-theme', darkmodeActive ? 'dark' : 'light');
+                            var darkswitch = document.getElementById('flexSwitchCheckDefault');
+                            darkswitch.checked = darkmodeActive;
+
+                            darkswitch.addEventListener('click', function () {
+                                localStorage.setItem('darkmode', darkswitch.checked);
+                                document.getElementsByTagName('html')[0].setAttribute('data-bs-theme', darkswitch.checked ? 'dark' : 'light');
+
+                            });
+
+
+
+                        </script>
+                    </div>
+                </li>
+                <br>
+            </ul>
+        </div>
+    </footer>
+
+
 
 </body>
 
