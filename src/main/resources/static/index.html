@@ -29,9 +29,6 @@
                         <a class="nav-link active" aria-current="page" href="#">Startseite</a>
                     </li>
 
-                    <li class="nav-item" id="loginbtn">
-                        <a class="nav-link" href="login.html">Login</a>
-                    </li>
 
 
                 </ul>
@@ -43,10 +40,11 @@
         .week-calendar {
             display: grid;
             grid-template-columns: 50px repeat(5, 1fr);
+
             /* Platz für die Zeitskala */
             gap: 5px;
             max-width: 1000px;
-            width: 1000px;
+            width: auto;
         }
 
         .time-scale {
@@ -119,12 +117,12 @@
         <div class="accordion" id="accordionExample">
             <div class="accordion-item">
                 <h2 class="accordion-header">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
                         Zeitplan
                     </button>
                 </h2>
-                <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#accordionExample">
+                <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#accordionExample">
                     <div class="accordion-body">
                         <div class="week-calendar" id="weekCalendar"></div>
                         <br>
@@ -135,39 +133,152 @@
         </div>
 
 
+        <br>
+        <h2>Kalender hochladen</h2>
+        <p>Bitte laden Sie Ihren Stundenplan im .ics-Format hoch</p>
+        <div class="input-group mb-3" style="max-width: 500px;">
+            <input type="file" class="form-control" id="fileupload" accept=".ics">
+            <button id="submitfileupload" class="btn btn-primary" disabled>Hochladen</button>
+        </div>
+
+
+
+
+        <br>
+        <p>
+        <div class="input-group mb-3" style="max-width: 500px;">
+
+            <input type="email" class="form-control" id="email" placeholder="email@student.hs-rm.de"> </input>
+            <button id="submitemail" class="btn btn-primary">Absenden</button>
+        </div>
+        <script>
+            var email = document.getElementById('email');
+            var submitemail = document.getElementById('submitemail');
+
+            submitemail.addEventListener('click', function () {
+
+                if (email.value.includes("@student.hs-rm.de")) {
+                    var firstpart = email.value.split("@")[0];
+                    if (firstpart.includes(".")) {
+                        alert("Email wurde erfolgreich gespeichert");
+                    } else {
+                        alert("Bitte geben Sie eine gültige Studenten-Email ein");
+                        return;
+                    }
+                } else {
+                    alert("Bitte geben Sie eine gültige Studenten-Email ein");
+                }
+
+            });
+
+
+        </script>
+        </p>
+
+
     </div>
-    <script>
-        (function () {
-            const days = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
+    <script type="module">
+
+        import * as ical from 'ical';
+
+        var icalurl = "./plans.ics";
+        icalurl = "./nico.ics";
+        fetch(icalurl).then(response => response.text()).then(data => {
+            var parsed = ical.parseICS(data);
+            showIcalCalendar(parsed);
+        });
+        var file = document.getElementById('fileupload');
+        var submit = document.getElementById('submitfileupload');
+
+        file.addEventListener('change', function () {
+            submit.disabled = false;
+        });
+
+        function showUploadedCalendar() {
+
+            var filedata = file.files[0];
+            if (filedata.name.split('.').pop() != "ics") {
+                alert("Bitte laden Sie eine .ics-Datei hoch");
+                return;
+            }
+            submit.disabled = true;
+
+
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                var data = e.target.result;
+
+                var parsed = ical.parseICS(data);
+                showIcalCalendar(parsed);
+            };
+            reader.readAsText(filedata);
+        }
+        submit.addEventListener('click', function () {
+            showUploadedCalendar();
+        });
+
+
+        function showIcalCalendar(parsed) {
+            let items = [
+                [], [], [], [], []
+            ];
+
+
+
+            for (let element in parsed) {
+                if (parsed.hasOwnProperty(element)) {
+                    var parsedElement = parsed[element];
+                    if (parsedElement.type != "VEVENT") {
+                        continue;
+                    }
+                    var startDate = new Date(parsedElement.start);
+                    var endDate = new Date(parsedElement.end);
+                    var parsedStartDate = startDate.getHours() + ":" + (startDate.getMinutes() < 10 ? '0' : '') + startDate.getMinutes();
+                    var parsedEndDate = endDate.getHours() + ":" + (endDate.getMinutes() < 10 ? '0' : '') + endDate.getMinutes();
+                    var title = parsedElement.summary;
+                    var eventtype = title.match(/\(([^)]+)\)/)[1].split("-")[0];
+                    var event = {
+                        title: title,
+                        subtext: '',
+                        color: 'lightgreen',
+                        start: parsedStartDate,
+                        end: parsedEndDate
+                    };
+                    switch (eventtype) {
+                        case "V":
+                            event.color = '#4961E1';
+                            break;
+                        case "P":
+                            event.color = '#F4A460';
+                            break;
+                        case "Ü":
+                            event.color = '#32CD32';
+                            break;
+                        case "S":
+                            event.color = '#556B2F';
+                            break;
+                        default:
+                            event.color = 'grey';
+                    }
+
+                    var selectDay = startDate.getDay() - 1;
+                    items[selectDay].push(event);
+                }
+            }
+            showCalendar(items);
+        }
+
+
+        function showCalendar(items) {
+            var dayNames = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
+            const days = [{ 'Montag': [] }, { 'Dienstag': [] }, { 'Mittwoch': [] }, { 'Donnerstag': [] }, { 'Freitag': [] }];
             const startHour = 7;  // 8:00 Uhr
             const endHour = 20;   // 21:00 Uhr
 
-            const items = {
-                'Montag': [
-                    { title: 'CG (V)', subtext: '', color: 'cyan', start: '11:45', end: '13:15' }
-                ],
-                'Dienstag': [],
-                'Mittwoch': [
-                    { title: 'Recht (V)', subtext: '', color: 'cyan', start: '08:15', end: '09:45' },
-                    { title: 'BS (V)', subtext: '', color: 'cyan', start: '10:00', end: '11:30' },
-                    { title: 'CG (P-F)', subtext: 'F', color: '#ffb74d', start: '14:15', end: '15:45' },
-                    { title: 'SWT (P-D)', subtext: 'D', color: '#ffb74d', start: '16:00', end: '17:30' }
-                ],
-                'Donnerstag': [
-                    { title: 'SWT (V)', subtext: '', color: 'cyan', start: '08:15', end: '09:45' },
-                    { title: 'SWT (S-A)', subtext: '', color: '#4caf50', start: '10:00', end: '11:30' },
-                    { title: 'BS (P-B)', subtext: 'B', color: 'orange', start: '16:00', end: '17:30' }
-                ],
-                'Freitag': [
-                    { title: 'Recht (Ü)', subtext: '', color: 'lightgreen', start: '08:15', end: '09:45' },
-                    { title: 'StatWR (V)', subtext: '', color: 'cyan', start: '10:00', end: '11:30' },
-                    { title: 'StatWR (Ü-D)', subtext: 'D', color: 'lightgreen', start: '14:15', end: '15:45' }
-                ]
-            };
 
 
             const calendarEl = document.getElementById('weekCalendar');
-
+            calendarEl.innerHTML = '';
             function timeToPosition(time) {
                 const [hours, minutes] = time.split(':').map(Number);
                 const totalHours = (hours - startHour) + (minutes / 60);
@@ -188,16 +299,17 @@
             }
             calendarEl.appendChild(timeScaleEl);
 
+            var count = 0;
             days.forEach(day => {
                 const dayEl = document.createElement('div');
                 dayEl.classList.add('day');
                 const dayHeader = document.createElement('div');
                 dayHeader.classList.add('day-header');
-                dayHeader.textContent = day;
+                dayHeader.textContent = dayNames[count++];
                 dayEl.appendChild(dayHeader);
                 var samestart = 0;
                 var currentstart = 0;
-                (items[day] || []).forEach((item, index) => {
+                (items[count] || []).forEach((item, index) => {
                     const itemEl = document.createElement('div');
                     itemEl.classList.add('item');
                     itemEl.style.backgroundColor = item.color;
@@ -216,11 +328,9 @@
                     itemEl.style.left = `${samestart * 25}px`;
 
                     itemEl.addEventListener('mouseover', function () {
-                        itemEl.style.maxWidth = "150px";
                         itemEl.style.zIndex = 2;  // hervorheben
                     });
                     itemEl.addEventListener('mouseout', function () {
-                        itemEl.style.maxWidth = "80px";
                         itemEl.style.zIndex = 1;  // zurücksetzen
                     });
                     itemEl.addEventListener('click', function () {
@@ -232,7 +342,7 @@
 
                 calendarEl.appendChild(dayEl);
             });
-        })();
+        }
     </script>
 
 

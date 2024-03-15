@@ -13,7 +13,6 @@ public class WebEndpointExample {
 
 	@GetMapping("/hello")
 	public String hello(@RequestParam(defaultValue = "World!") String name) {
-
 		userRepository.deleteAll();
 
 		User myuser = userRepository.findByHsMail("privateMail@student.hs-rm.de").orElse(null);
