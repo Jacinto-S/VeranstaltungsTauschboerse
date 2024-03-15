@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+
+<head>
+    <meta charset=" UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wochenkalender</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+
+</head>
+
+<body>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+        crossorigin="anonymous"></script>
+
+
+    <nav class="navbar navbar-expand-sm bg-dark sticky-top" data-bs-theme="dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Tauschbörse</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown"
+                aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNavDropdown">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="#">Startseite</a>
+                    </li>
+
+
+
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <style>
+        .week-calendar {
+            display: grid;
+            grid-template-columns: 50px repeat(5, 1fr);
+
+            /* Platz für die Zeitskala */
+            gap: 5px;
+            max-width: 1000px;
+            width: auto;
+        }
+
+        .time-scale {
+            height: 600px;
+            position: relative;
+        }
+
+        .time-scale div {
+            position: absolute;
+            width: 100%;
+            font-size: 1em;
+            text-align: right;
+            padding-right: 10px;
+        }
+
+        .day {
+            position: relative;
+            padding-top: 25px;
+            border: 1px solid #ccc;
+            height: 600px;
+        }
+
+        .day-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            text-align: center;
+        }
+
+        .item-title {
+            font-size: 1em;
+        }
+
+        .item {
+            position: absolute;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid black;
+            z-index: 1;
+            overflow: hidden;
+            max-width: 80px;
+            width: auto;
+            min-width: 80px;
+            font-size: 12px;
+        }
+
+        .title-line {
+            margin: 0;
+            border: 0;
+            border-top: 1px solid black;
+            width: 100%;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+
+        }
+
+        .item-subtext {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+    </style>
+
+
+    <div style="padding:10px;" class="container">
+        <h1>Wochenkalender</h1>
+        <div class="accordion" id="accordionExample">
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+                        Zeitplan
+                    </button>
+                </h2>
+                <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#accordionExample">
+                    <div class="accordion-body">
+                        <div class="week-calendar" id="weekCalendar"></div>
+                        <br>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <br>
+        <h2>Kalender hochladen</h2>
+        <p>Bitte laden Sie Ihren Stundenplan im .ics-Format hoch</p>
+        <div class="input-group mb-3" style="max-width: 500px;">
+            <input type="file" class="form-control" id="fileupload" accept=".ics">
+            <button id="submitfileupload" class="btn btn-primary" disabled>Hochladen</button>
+        </div>
+
+
+
+
+        <br>
+        <p>
+        <div class="input-group mb-3" style="max-width: 500px;">
+
+            <input type="email" class="form-control" id="email" placeholder="email@student.hs-rm.de"> </input>
+            <button id="submitemail" class="btn btn-primary">Absenden</button>
+        </div>
+        <script>
+            var email = document.getElementById('email');
+            var submitemail = document.getElementById('submitemail');
+
+            submitemail.addEventListener('click', function () {
+
+                if (email.value.includes("@student.hs-rm.de")) {
+                    var firstpart = email.value.split("@")[0];
+                    if (firstpart.includes(".")) {
+                        alert("Email wurde erfolgreich gespeichert");
+                    } else {
+                        alert("Bitte geben Sie eine gültige Studenten-Email ein");
+                        return;
+                    }
+                } else {
+                    alert("Bitte geben Sie eine gültige Studenten-Email ein");
+                }
+
+            });
+
+
+        </script>
+        </p>
+
+
+    </div>
+    <script type="module">
+
+        import * as ical from 'ical';
+
+        var icalurl = "./plans.ics";
+        icalurl = "./nico.ics";
+        fetch(icalurl).then(response => response.text()).then(data => {
+            var parsed = ical.parseICS(data);
+            showIcalCalendar(parsed);
+        });
+        var file = document.getElementById('fileupload');
+        var submit = document.getElementById('submitfileupload');
+
+        file.addEventListener('change', function () {
+            submit.disabled = false;
+        });
+
+        function showUploadedCalendar() {
+
+            var filedata = file.files[0];
+            if (filedata.name.split('.').pop() != "ics") {
+                alert("Bitte laden Sie eine .ics-Datei hoch");
+                return;
+            }
+            submit.disabled = true;
+
+
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                var data = e.target.result;
+
+                var parsed = ical.parseICS(data);
+                showIcalCalendar(parsed);
+            };
+            reader.readAsText(filedata);
+        }
+        submit.addEventListener('click', function () {
+            showUploadedCalendar();
+        });
+
+
+        function showIcalCalendar(parsed) {
+            let items = [
+                [], [], [], [], []
+            ];
+
+
+
+            for (let element in parsed) {
+                if (parsed.hasOwnProperty(element)) {
+                    var parsedElement = parsed[element];
+                    if (parsedElement.type != "VEVENT") {
+                        continue;
+                    }
+                    var startDate = new Date(parsedElement.start);
+                    var endDate = new Date(parsedElement.end);
+                    var parsedStartDate = startDate.getHours() + ":" + (startDate.getMinutes() < 10 ? '0' : '') + startDate.getMinutes();
+                    var parsedEndDate = endDate.getHours() + ":" + (endDate.getMinutes() < 10 ? '0' : '') + endDate.getMinutes();
+                    var title = parsedElement.summary;
+                    var eventtype = title.match(/\(([^)]+)\)/)[1].split("-")[0];
+                    var event = {
+                        title: title,
+                        subtext: '',
+                        color: 'lightgreen',
+                        start: parsedStartDate,
+                        end: parsedEndDate
+                    };
+                    switch (eventtype) {
+                        case "V":
+                            event.color = '#4961E1';
+                            break;
+                        case "P":
+                            event.color = '#F4A460';
+                            break;
+                        case "Ü":
+                            event.color = '#32CD32';
+                            break;
+                        case "S":
+                            event.color = '#556B2F';
+                            break;
+                        default:
+                            event.color = 'grey';
+                    }
+
+                    var selectDay = startDate.getDay() - 1;
+                    items[selectDay].push(event);
+                }
+            }
+            showCalendar(items);
+        }
+
+
+        function showCalendar(items) {
+            var dayNames = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
+            const days = [{ 'Montag': [] }, { 'Dienstag': [] }, { 'Mittwoch': [] }, { 'Donnerstag': [] }, { 'Freitag': [] }];
+            const startHour = 7;  // 8:00 Uhr
+            const endHour = 20;   // 21:00 Uhr
+
+
+
+            const calendarEl = document.getElementById('weekCalendar');
+            calendarEl.innerHTML = '';
+            function timeToPosition(time) {
+                const [hours, minutes] = time.split(':').map(Number);
+                const totalHours = (hours - startHour) + (minutes / 60);
+                return (totalHours / (endHour - startHour)) * 100;
+            }
+
+            // Zeitskala hinzufügen
+            const timeScaleEl = document.createElement('div');
+            timeScaleEl.classList.add('time-scale');
+            for (let hour = startHour; hour <= endHour; hour++) {
+                for (let minute = 0; minute < 60; minute += 60) {
+                    if (hour === startHour && minute === 0) continue;  // 8:00 überspringen
+                    const timeDiv = document.createElement('div');
+                    timeDiv.textContent = `${hour}:${String(minute).padStart(2, '0')}`;
+                    timeDiv.style.top = `${timeToPosition(`${hour}:${minute}`)}%`;
+                    timeScaleEl.appendChild(timeDiv);
+                }
+            }
+            calendarEl.appendChild(timeScaleEl);
+
+            var count = 0;
+            days.forEach(day => {
+                const dayEl = document.createElement('div');
+                dayEl.classList.add('day');
+                const dayHeader = document.createElement('div');
+                dayHeader.classList.add('day-header');
+                dayHeader.textContent = dayNames[count++];
+                dayEl.appendChild(dayHeader);
+                var samestart = 0;
+                var currentstart = 0;
+                (items[count] || []).forEach((item, index) => {
+                    const itemEl = document.createElement('div');
+                    itemEl.classList.add('item');
+                    itemEl.style.backgroundColor = item.color;
+
+                    if (currentstart == item.start) {
+                        samestart++;
+                    } else {
+                        samestart = 0;
+                    }
+                    currentstart = item.start;
+
+                    itemEl.innerHTML = `<strong class="item-title" style="background:${item.color}">${item.title}</strong><hr class="title-line"><div class="item-subtext">${item.subtext}</div>`;
+
+                    itemEl.style.top = `${timeToPosition(item.start)}%`;
+                    itemEl.style.height = `${timeToPosition(item.end) - timeToPosition(item.start)}%`;
+                    itemEl.style.left = `${samestart * 25}px`;
+
+                    itemEl.addEventListener('mouseover', function () {
+                        itemEl.style.zIndex = 2;  // hervorheben
+                    });
+                    itemEl.addEventListener('mouseout', function () {
+                        itemEl.style.zIndex = 1;  // zurücksetzen
+                    });
+                    itemEl.addEventListener('click', function () {
+                        alert(`Du hast auf ${item.title} am ${day} geklickt.`);
+                    });
+
+                    dayEl.appendChild(itemEl);
+                });
+
+                calendarEl.appendChild(dayEl);
+            });
+        }
+    </script>
+
+
+
+
+    <footer style="margin-top: 500px;">
+        <hr>
+        <div class="container p-4 pb-0">
+
+            <h6 class="text-uppercase">Links</h6>
+
+            <ul class="list-unstyled mb-0">
+                <li>
+                    <a href="#!" class="text">Impressum</a>
+                </li>
+                <li>
+                    <a href="#!" class="text">FAQ</a>
+                </li>
+                <li>
+                    <a href="#!" class="text">Datenschutz</a>
+                </li>
+                <li>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckDefault">
+                        <label class="form-check-label" for="flexSwitchCheckDefault">Darkmode</label>
+                        <script>
+                            var darkmodeActive = localStorage.getItem('darkmode') === 'true' || (!('darkmode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+                            document.getElementsByTagName('html')[0].setAttribute('data-bs-theme', darkmodeActive ? 'dark' : 'light');
+                            var darkswitch = document.getElementById('flexSwitchCheckDefault');
+                            darkswitch.checked = darkmodeActive;
+
+                            darkswitch.addEventListener('click', function () {
+                                localStorage.setItem('darkmode', darkswitch.checked);
+                                document.getElementsByTagName('html')[0].setAttribute('data-bs-theme', darkswitch.checked ? 'dark' : 'light');
+
+                            });
+
+
+
+                        </script>
+                    </div>
+                </li>
+                <br>
+            </ul>
+        </div>
+    </footer>
+
+
+
+</body>
+
+</html>
