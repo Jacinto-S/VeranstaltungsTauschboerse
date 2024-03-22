@@ -1,31 +1,120 @@
 package team.boerse.tauschboerse;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
+import team.boerse.tauschboerse.mail.MailUtils;
+
+@EnableScheduling
 @RestController
 public class WebEndpointExample {
 
 	@Autowired
 	UserRepository userRepository;
 
-	@GetMapping("/hello")
-	public String hello(@RequestParam(defaultValue = "World!") String name) {
-		userRepository.deleteAll();
+	HashMap<String, String> tokens = new HashMap<>();
+	HashMap<String, Long> removeTimerForTokens = new HashMap<>();
 
-		User myuser = userRepository.findByHsMail("privateMail@student.hs-rm.de").orElse(null);
-		if (myuser == null) {
-			User user = new User("privateMail@student.hs-rm.de", "", "Max", "Mustermann", "Informatik", "", false,
-					false, false, false, "");
-			userRepository.save(user);
-			myuser = userRepository.findByHsMail("privateMail@student.hs-rm.de").get();
-		}
-		if (myuser != null) {
-			return "Hello " + myuser.getVorname() + " " + myuser.getNachname();
+	@Scheduled(fixedDelay = 60000)
+	public void removeExpiredTokens() {
+		long currentTime = System.currentTimeMillis();
+		List<String> expiredTokens = new ArrayList<>();
+
+		for (Map.Entry<String, Long> entry : removeTimerForTokens.entrySet()) {
+			if (entry.getValue() < currentTime) {
+				expiredTokens.add(entry.getKey());
+			}
 		}
 
-		return "Hello, Something went wrong!";
+		for (String token : expiredTokens) {
+			tokens.remove(token);
+			removeTimerForTokens.remove(token);
+		}
 	}
+
+	@GetMapping("/requestLogin")
+	public ResponseEntity<String> requestLogin(@RequestParam String hsMail, HttpServletResponse response) {
+
+		if (!isCorrectMailFormat(hsMail)) {
+			return ResponseEntity.badRequest().body("Invalid mail format");
+		}
+		String token = UUID.randomUUID().toString();
+		tokens.put(token, hsMail);
+		removeTimerForTokens.put(token, System.currentTimeMillis() + 1000 * 60 * 10);
+
+		MailUtils.sendMail(hsMail, "Login",
+				"Click here to login:\n http://localhost:5173/?logintoken=" + token);
+
+		return ResponseEntity.ok().build();
+	}
+
+	private boolean isCorrectMailFormat(String hsMail) {
+		String[] adress = hsMail.split("@");
+		return adress[0].contains(".") && adress[1].equals("student.hs-rm.de");
+	}
+
+	@GetMapping("/login")
+	public ResponseEntity<String> login(@RequestParam String logintoken, HttpServletResponse response) {
+
+		String hsMail = tokens.get(logintoken);
+		if (hsMail == null) {
+			return ResponseEntity.badRequest().body("Invalid token");
+		}
+		User user = userRepository.findByHsMail(hsMail).orElse(null);
+		String accessToken = UUID.randomUUID().toString();
+		if (user == null) {
+			user = new User(hsMail, null, accessToken, null, null);
+		}
+		user.setAccessToken(accessToken);
+		Cookie cookie = new Cookie("sessionToken", user.getAccessToken());
+		cookie.setMaxAge(60 * 60 * 24);
+		cookie.setHttpOnly(true);
+		cookie.setPath("/");
+		response.setHeader("Set-Cookie", UserUtil.convertCookieToSetCookie(cookie));
+		tokens.remove(logintoken);
+		removeTimerForTokens.remove(logintoken);
+		userRepository.save(user);
+
+		return ResponseEntity.ok().build();
+	}
+
+	@GetMapping("/logmeout")
+	public ResponseEntity<String> logout(HttpServletResponse response) {
+		User user = UserUtil.getUser();
+		if (user == null) {
+			return ResponseEntity.badRequest().body("User not logged in");
+		}
+		user.setAccessToken(null);
+		userRepository.save(user);
+
+		Cookie cookie = new Cookie("sessionToken", "");
+		cookie.setMaxAge(0);
+		cookie.setHttpOnly(true);
+		cookie.setPath("/");
+		response.setHeader("Set-Cookie", UserUtil.convertCookieToSetCookie(cookie));
+		return ResponseEntity.ok().build();
+	}
+
+	@GetMapping("/whoami")
+	public String whoami() {
+		User user = UserUtil.getUser();
+		if (user == null) {
+			return "Not logged in";
+		}
+		return user.getHsMail();
+	}
+
 }

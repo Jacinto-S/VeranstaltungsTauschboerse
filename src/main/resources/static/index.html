@@ -113,7 +113,7 @@
 
 
     <div style="padding:10px;" class="container">
-        <h1>Wochenkalender</h1>
+        <h1 id="title">Wochenkalender</h1>
         <div class="accordion" id="accordionExample">
             <div class="accordion-item">
                 <h2 class="accordion-header">
@@ -131,13 +131,33 @@
                 </div>
             </div>
         </div>
-
-
         <br>
+        <button class="btn btn-primary" id="confirmOffer" style="display: none;">Angebot erstellen</button>
+        <br>
+        <br>
+
         <h2>Kalender hochladen</h2>
-        <p>Bitte laden Sie Ihren Stundenplan im .ics-Format hoch</p>
+        <p>Bitte laden Sie Ihren Stundenplan von<br><a id="aorurl"
+                href="#">https://aor.cs.hs-rm.de/plans.ics?user_plan=true</a>
+            <br>als .ics Datei hoch
+        </p>
+        <script>
+            var aorurl = document.getElementById('aorurl');
+            // select text of aorurl
+            aorurl.addEventListener('click', function (event) {
+                event.preventDefault();
+                var range = document.createRange();
+                range.selectNode(aorurl);
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
+                document.execCommand('copy');
+                window.getSelection().removeAllRanges();
+                alert("Link wurde in die Zwischenablage kopiert");
+            });
+
+        </script>
         <div class="input-group mb-3" style="max-width: 500px;">
-            <input type="file" class="form-control" id="fileupload" accept=".ics">
+            <input type="file" class="form-control" id="fileupload" accept=".ics" disabled>
             <button id="submitfileupload" class="btn btn-primary" disabled>Hochladen</button>
         </div>
 
@@ -146,7 +166,7 @@
 
         <br>
         <p>
-        <div class="input-group mb-3" style="max-width: 500px;">
+        <div class="input-group mb-3" style="max-width: 500px;" id="MailBoxGroup">
 
             <input type="email" class="form-control" id="email" placeholder="email@student.hs-rm.de"> </input>
             <button id="submitemail" class="btn btn-primary">Absenden</button>
@@ -154,13 +174,69 @@
         <script>
             var email = document.getElementById('email');
             var submitemail = document.getElementById('submitemail');
+            var state = 0;
+            var offer = null;
+            var gesucht = [];
+
+            var urlparams = new URLSearchParams(window.location.search);
+            var logintoken = urlparams.get('logintoken');
+            if (logintoken != null) {
+                var url = "";
+                if (isDev()) {
+                    url = "http://localhost:8085/login";
+                } else {
+                    url = "/login";
+                }
+                url = url + "?logintoken=" + logintoken;
+                fetch(url, {
+                    method: 'GET',
+                    credentials: 'include'
+                }).then(response => {
+                    if (response.ok) {
+                        alert("Erfolgreich eingeloggt");
+                        window.location.href = "/";
+                    } else {
+                        alert("Fehler beim Einloggen");
+                    }
+                });
+            }
+
+
+
+            function isDev() {
+                return window.location.href.includes("localhost");
+            }
+
+
 
             submitemail.addEventListener('click', function () {
 
                 if (email.value.includes("@student.hs-rm.de")) {
                     var firstpart = email.value.split("@")[0];
                     if (firstpart.includes(".")) {
-                        alert("Email wurde erfolgreich gespeichert");
+                        var url = "";
+                        if (isDev()) {
+                            url = "http://localhost:8085/requestLogin";
+                        } else {
+                            url = "/requestLogin";
+                        }
+                        url = url + "?hsMail=" + email.value;
+                        submitemail.disabled = true;
+                        setTimeout(function () {
+                            submitemail.disabled = false;
+                        }, 30000);
+
+                        fetch(url, {
+                            method: 'GET',
+                            credentials: 'include'
+                        }).then(response => {
+                            if (response.ok) {
+                                alert("Bitte prüfe dein Postfach");
+                            } else {
+                                alert("Fehler beim Versenden der Email");
+                            }
+                        });
+
                     } else {
                         alert("Bitte geben Sie eine gültige Studenten-Email ein");
                         return;
@@ -175,20 +251,108 @@
         </script>
         </p>
 
+        <br><br>
 
+        <div class="btn-group" role="group" aria-label="Basic example">
+            <button class="btn btn-warning" id="logoutbtn" style="display: none;">Ausloggen</button>
+            <button class="btn btn-danger" id="removeAllOvers">Alle Angebote löschen</button>
+        </div>
+
+
+
+
+        <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="exampleModalLabel">Herlichen Glückwunsch!</h4>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="modalbody">
+                        <p> Sie haben ein Angebot angenommen. </p>
+                        <p> Bitte warten Sie, bis die Verarbeitung abgeschlossen ist. </p>
+                        <div class="progress">
+                            <div class="progress-bar" role="progressbar" id="fakeprogress" style="width: 0%;"
+                                aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">25%</div>
+                        </div>
+
+
+
+
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
     </div>
     <script type="module">
-
+        import { Modal } from 'bootstrap';
         import * as ical from 'ical';
+
+
+
+
+
 
         var icalurl = "./plans.ics";
         icalurl = "./nico.ics";
-        fetch(icalurl).then(response => response.text()).then(data => {
-            var parsed = ical.parseICS(data);
-            showIcalCalendar(parsed);
-        });
+        //  fetch(icalurl).then(response => response.text()).then(data => {
+        //      var parsed = ical.parseICS(data);
+        //      showIcalCalendar(parsed);
+        //  });
+
+
+
         var file = document.getElementById('fileupload');
         var submit = document.getElementById('submitfileupload');
+        var removeAllOvers = document.getElementById('removeAllOvers');
+        var logoutbtn = document.getElementById('logoutbtn');
+
+        logoutbtn.addEventListener('click', function () {
+            var url = "";
+            if (isDev()) {
+                url = "http://localhost:8085/logmeout";
+            } else {
+                url = "/logmeout";
+            }
+            fetch(url, {
+                method: 'GET',
+                credentials: 'include'
+            }).then(response => {
+                if (response.ok) {
+                    localStorage.removeItem('loggedIn');
+
+                    alert("Erfolgreich ausgeloggt");
+                    window.location.reload();
+                } else {
+                    alert("Fehler beim Ausloggen");
+                }
+            });
+        });
+
+
+        removeAllOvers.addEventListener('click', function () {
+            var url = "";
+            if (isDev()) {
+                url = "http://localhost:8085/removeMyOffers";
+            } else {
+                url = "/removeMyOffers";
+            }
+            fetch(url, {
+                method: 'GET',
+                credentials: 'include'
+            }).then(response => {
+                if (response.ok) {
+                    alert("Alle Angebote erfolgreich gelöscht");
+                    getMyCalendar();
+                } else {
+                    alert("Fehler beim Löschen der Angebote");
+                }
+            });
+        });
 
         file.addEventListener('change', function () {
             submit.disabled = false;
@@ -207,6 +371,27 @@
             var reader = new FileReader();
             reader.onload = function (e) {
                 var data = e.target.result;
+                var url = "";
+                if (isDev()) {
+                    url = "http://localhost:8085/uploadKalender";
+                } else {
+                    url = "/uploadKalender";
+                }
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: data,
+                    credentials: 'include'
+                }).then(response => {
+                    if (response.ok) {
+                        alert("Kalender erfolgreich hochgeladen");
+                        getMyCalendar();
+                    } else {
+                        alert("Fehler beim Hochladen des Kalenders");
+                    }
+                });
 
                 var parsed = ical.parseICS(data);
                 showIcalCalendar(parsed);
@@ -216,6 +401,70 @@
         submit.addEventListener('click', function () {
             showUploadedCalendar();
         });
+
+        document.getElementById("confirmOffer").addEventListener('click', function () {
+            if (state == 0) {
+                alert("Bitte wählen Sie ein Angebot aus");
+                return;
+            }
+            if (gesucht.length == 0) {
+                alert("Bitte wählen Sie mindestens ein Gesuch aus");
+                return;
+            }
+            var angebot = {
+                "angebot": offer,
+                "gesucht": gesucht
+            };
+            console.log(angebot);
+            var offerUrl = "";
+            if (isDev()) {
+                offerUrl = "http://localhost:8085/createOffer";
+            } else {
+                offerUrl = "/createOffer";
+            }
+
+            fetch(offerUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(angebot),
+                credentials: 'include'
+            }).then(response => {
+                if (response.ok) {
+                    alert("Angebot erfolgreich erstellt");
+                    state = 0;
+                    offer = null;
+                    gesucht = [];
+                    getMyCalendar();
+                } else {
+                    alert("Fehler beim Erstellen des Angebots");
+                }
+            });
+        });
+
+        function getMyCalendar() {
+            var url = "";
+            if (isDev()) {
+                url = "http://localhost:8085/myKalender";
+            } else {
+                url = "/myKalender";
+            }
+            if (state == 1) {
+                url += "?title=" + (offer.title.split("(")[0].trim()) + "&terminid=" + offer.offerid;
+            }
+
+
+            fetch(url, {
+                method: 'GET',
+                credentials: 'include'
+            }).then(response => response.json()).then(data => {
+                showCalendar(data);
+            });
+        }
+        getMyCalendar();
+
+
 
 
         function showIcalCalendar(parsed) {
@@ -267,7 +516,7 @@
             }
             showCalendar(items);
         }
-
+        var lastclicked = -1;
 
         function showCalendar(items) {
             var dayNames = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
@@ -299,17 +548,20 @@
             }
             calendarEl.appendChild(timeScaleEl);
 
-            var count = 0;
+            var count = -1;
             days.forEach(day => {
                 const dayEl = document.createElement('div');
                 dayEl.classList.add('day');
                 const dayHeader = document.createElement('div');
                 dayHeader.classList.add('day-header');
-                dayHeader.textContent = dayNames[count++];
+                dayHeader.textContent = dayNames[1 + count++];
                 dayEl.appendChild(dayHeader);
                 var samestart = 0;
                 var currentstart = 0;
+                const currentDay = (count);
+
                 (items[count] || []).forEach((item, index) => {
+                    const offerId = item.offerid;
                     const itemEl = document.createElement('div');
                     itemEl.classList.add('item');
                     itemEl.style.backgroundColor = item.color;
@@ -326,6 +578,9 @@
                     itemEl.style.top = `${timeToPosition(item.start)}%`;
                     itemEl.style.height = `${timeToPosition(item.end) - timeToPosition(item.start)}%`;
                     itemEl.style.left = `${samestart * 25}px`;
+                    if (lastclicked == offerId) {
+                        itemEl.style.border = "5px solid pink";
+                    }
 
                     itemEl.addEventListener('mouseover', function () {
                         itemEl.style.zIndex = 2;  // hervorheben
@@ -334,7 +589,138 @@
                         itemEl.style.zIndex = 1;  // zurücksetzen
                     });
                     itemEl.addEventListener('click', function () {
-                        alert(`Du hast auf ${item.title} am ${day} geklickt.`);
+                        var curday = dayNames[1 + count];
+                        try {
+                            var eventtype = item.title.match(/\(([^)]+)\)/)[1].split("-")[0];
+                            if (eventtype == "V") {
+                                return;
+                            }
+                        } catch (error) {
+
+                        }
+                        if (state == 1 && item.subtext.includes("OFFER") && item.subtext.indexOf("ICH") == -1) {
+                            if (confirm("Willst du das Angebot annehmen: " + offerId)) {
+                                var url = "";
+                                if (isDev()) {
+                                    url = "http://localhost:8085/acceptOffer";
+                                } else {
+                                    url = "/acceptOffer";
+                                }
+                                url = url + "?selectedTermin=" + offerId;
+                                fetch(url, {
+                                    method: 'GET',
+                                    credentials: 'include'
+                                }).then(response => {
+                                    if (response.ok) {
+                                        state = 0;
+                                        offer = null;
+                                        gesucht = [];
+                                        getMyCalendar();
+                                        var instance = Modal.getOrCreateInstance(document.getElementById('exampleModal'));
+                                        instance.show();
+                                        var fakeprogress = document.getElementById('fakeprogress');
+                                        var percent = 0;
+                                        var interval = setInterval(function () {
+                                            percent += 1;
+                                            fakeprogress.style.width = percent + "%";
+                                            fakeprogress.textContent = percent + "%";
+                                            if (percent >= 100) {
+                                                clearInterval(interval);
+
+                                                response.text().then(data => {
+                                                    document.getElementById('modalbody').innerText = data;
+                                                });
+                                            }
+                                        }, 75);
+
+
+
+                                    } else {
+                                        alert("Fehler beim Annehmen des Angebots");
+                                    }
+                                });
+
+                            }
+                            return;
+                        } else if (state == 1 && item.title.indexOf("(") != -1) {
+
+                            if (lastclicked == offerId) {
+                                state = 0;
+                                lastclicked = -1;
+                                itemEl.style.border = "1px solid black";
+                                document.getElementById('confirmOffer').style.display = "none";
+                                gesucht = [];
+                                offer = null;
+                                getMyCalendar();
+                                return;
+                            }
+
+                            state = 1;
+                            gesucht = [];
+                            offer = {
+                                offerid: offerId,
+                                title: item.title,
+                                subtext: item.subtext,
+                                color: item.color,
+                                start: item.start,
+                                end: item.end,
+                                day: currentDay
+                            };
+                            lastclicked = offerId;
+
+
+                            getMyCalendar();
+                            return;
+                        }
+
+                        if (state == 0) {
+                            state = 1;
+                            lastclicked = offerId;
+                            itemEl.style.border = "5px solid pink";
+                            document.getElementById('confirmOffer').style.display = "block";
+                            document.getElementById('confirmOffer').disabled = "true";
+                            offer = {
+                                offerid: offerId,
+                                title: item.title,
+                                subtext: item.subtext,
+                                color: item.color,
+                                start: item.start,
+                                end: item.end,
+                                day: currentDay
+                            };
+                            getMyCalendar();
+
+                        } else if (state == 1) {
+
+
+                            if (itemEl.style.border == "5px solid purple") {
+                                itemEl.style.border = "1px solid black";
+                                gesucht.forEach((element, index) => {
+                                    if (element.day == currentDay && element.start == item.start && element.end == item.end) {
+                                        gesucht.splice(index, 1);
+                                    }
+                                });
+                            } else {
+                                itemEl.style.border = "5px solid purple";
+
+                                gesucht.push({
+                                    title: offer.title,
+                                    subtext: item.subtext,
+                                    color: item.color,
+                                    start: item.start,
+                                    end: item.end,
+                                    day: currentDay
+                                });
+                            }
+                            console.log(gesucht);
+                            if (gesucht.length > 0) {
+                                document.getElementById('confirmOffer').disabled = false;
+                            } else {
+                                document.getElementById('confirmOffer').disabled = true;
+                            }
+
+                        }
+
                     });
 
                     dayEl.appendChild(itemEl);
@@ -343,6 +729,67 @@
                 calendarEl.appendChild(dayEl);
             });
         }
+
+        var whoamiurl = "/";
+        if (isDev()) {
+            whoamiurl = "http://localhost:8085/whoami";
+        } else {
+            whoamiurl = "/whoami";
+        }
+        var loggedIn = localStorage.getItem('loggedIn') === 'true';
+        var name = "";
+        var whoamidata = "";
+
+
+        function manageVisibility() {
+            if (loggedIn) {
+                loggedIn = true;
+                document.getElementById('fileupload').disabled = false;
+                document.getElementById('logoutbtn').style.display = "block";
+                document.getElementById('MailBoxGroup').style.display = "none";
+                document.getElementById('removeAllOvers').style.display = "block";
+            } else {
+                document.getElementById('title').innerText = "Wochenkalender (Nicht eingeloggt)";
+                document.getElementById('removeAllOvers').style.display = "none";
+                document.getElementById('logoutbtn').style.display = "none";
+                document.getElementById('confirmOffer').style.display = "none";
+            }
+        }
+        manageVisibility();
+        fetch(whoamiurl, {
+            method: 'GET',
+            credentials: 'include'
+        }).then(response => {
+            if (response.ok) {
+                response.text().then(data => {
+                    if (data.includes("student.hs-rm.de")) {
+                        loggedIn = true;
+                        localStorage.setItem('loggedIn', "true");
+                        whoamidata = data;
+                        document.getElementById('title').innerText = "Wochenkalender für " + extractName(whoamidata);
+                        manageVisibility();
+                    } else {
+                        localStorage.removeItem('loggedIn');
+                        loggedIn = false;
+                        manageVisibility();
+                    }
+                });
+            }
+        });
+
+        function extractName(adress) {
+            let namensTeil = adress.split("@")[0];
+            let name = namensTeil.split(".");
+            var givenName = name[0];
+            givenName = givenName.charAt(0).toUpperCase() + givenName.slice(1);
+            var familyName = name[1];
+            familyName = familyName.charAt(0).toUpperCase() + familyName.slice(1);
+
+            let parsedName = givenName + " " + familyName;
+            return parsedName;
+        }
+
+
     </script>
 
 
@@ -380,7 +827,6 @@
                                 document.getElementsByTagName('html')[0].setAttribute('data-bs-theme', darkswitch.checked ? 'dark' : 'light');
 
                             });
-
 
 
                         </script>

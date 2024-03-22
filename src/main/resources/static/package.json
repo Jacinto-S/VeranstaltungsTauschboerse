@@ -12,6 +12,7 @@
     "vite": "^5.1.6"
   },
   "dependencies": {
+    "bootstrap": "^5.3.3",
     "ical": "^0.8.0"
   }
 }

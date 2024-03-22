@@ -82,4 +82,8 @@ public class KalenderTermin {
         this.type = type;
     }
 
+    public long getId() {
+        return id;
+    }
+
 }
