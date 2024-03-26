@@ -42,7 +42,7 @@
             grid-template-columns: 50px repeat(5, 1fr);
 
             /* Platz für die Zeitskala */
-            gap: 5px;
+            gap: 0px;
             max-width: 1000px;
             width: auto;
         }
@@ -60,11 +60,13 @@
             padding-right: 10px;
         }
 
+
         .day {
             position: relative;
             padding-top: 25px;
-            border: 1px solid #ccc;
+            border-top: none;
             height: 600px;
+            border: 1px solid #ccc;
         }
 
         .day-header {
@@ -72,6 +74,7 @@
             top: 0;
             left: 0;
             width: 100%;
+            border-bottom: 1px solid #ccc;
             text-align: center;
         }
 
@@ -87,8 +90,7 @@
             border: 1px solid black;
             z-index: 1;
             overflow: hidden;
-            max-width: 80px;
-            width: auto;
+            width: 80px;
             min-width: 80px;
             font-size: 12px;
         }
@@ -114,30 +116,16 @@
 
     <div style="padding:10px;" class="container">
         <h1 id="title">Wochenkalender</h1>
-        <div class="accordion" id="accordionExample">
-            <div class="accordion-item">
-                <h2 class="accordion-header">
-                    <button class="accordion-button" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
-                        Zeitplan
-                    </button>
-                </h2>
-                <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#accordionExample">
-                    <div class="accordion-body">
-                        <div class="week-calendar" id="weekCalendar"></div>
-                        <br>
+        <br>
+        <div class="week-calendar" id="weekCalendar"></div>
 
-                    </div>
-                </div>
-            </div>
-        </div>
         <br>
         <button class="btn btn-primary" id="confirmOffer" style="display: none;">Angebot erstellen</button>
         <br>
         <br>
 
         <h2>Kalender hochladen</h2>
-        <p>Bitte laden Sie Ihren Stundenplan von<br><a id="aorurl"
+        <p>Bitte lade deinen Stundenplan von<br><a id="aorurl"
                 href="#">https://aor.cs.hs-rm.de/plans.ics?user_plan=true</a>
             <br>als .ics Datei hoch
         </p>
@@ -157,9 +145,13 @@
 
         </script>
         <div class="input-group mb-3" style="max-width: 500px;">
-            <input type="file" class="form-control" id="fileupload" accept=".ics" disabled>
+            <input type="file" class="form-control" id="fileupload" accept=".ics">
             <button id="submitfileupload" class="btn btn-primary" disabled>Hochladen</button>
+            <span style="opacity: 0.7;font-size: small;padding-top: 5px;">Vorsicht! Beim Hochladen eines neuen Kalenders
+                werden alle deine Angebote
+                entfernt</span>
         </div>
+
 
 
 
@@ -193,10 +185,21 @@
                     credentials: 'include'
                 }).then(response => {
                     if (response.ok) {
-                        alert("Erfolgreich eingeloggt");
-                        window.location.href = "/";
+                        response.text().then(data => {
+                            if (data.indexOf("New") != -1) {
+                                localStorage.setItem('uploadLocalCalendar', "true");
+                            } else {
+                                localStorage.setItem('loggedIn', "true");
+                                localStorage.removeItem('tempCalendar');
+                                alert("Erfolgreich eingeloggt");
+                                window.location.href = "/";
+
+                            }
+
+                        });
+
                     } else {
-                        alert("Fehler beim Einloggen");
+                        window.history.replaceState({}, document.title, "/");
                     }
                 });
             }
@@ -291,20 +294,7 @@
     <script type="module">
         import { Modal } from 'bootstrap';
         import * as ical from 'ical';
-
-
-
-
-
-
-        var icalurl = "./plans.ics";
-        icalurl = "./nico.ics";
-        //  fetch(icalurl).then(response => response.text()).then(data => {
-        //      var parsed = ical.parseICS(data);
-        //      showIcalCalendar(parsed);
-        //  });
-
-
+        window.ical = ical;
 
         var file = document.getElementById('fileupload');
         var submit = document.getElementById('submitfileupload');
@@ -377,6 +367,13 @@
                 } else {
                     url = "/uploadKalender";
                 }
+                if (localStorage.getItem('loggedIn') !== 'true') {
+                    localStorage.setItem('tempCalendar', data);
+                    showIcalCalendar(window.ical.parseICS(data));
+
+                    return;
+                }
+
                 fetch(url, {
                     method: 'POST',
                     headers: {
@@ -438,7 +435,12 @@
                     gesucht = [];
                     getMyCalendar();
                 } else {
-                    alert("Fehler beim Erstellen des Angebots");
+                    if (response.status == 403) {
+                        alert("Du darfst höchstens 2 Angebote gleichzeitig haben!");
+                    } else {
+                        alert("Fehler beim Erstellen des Angebots.");
+                    }
+
                 }
             });
         });
@@ -573,13 +575,14 @@
                     }
                     currentstart = item.start;
 
-                    itemEl.innerHTML = `<strong class="item-title" style="background:${item.color}">${item.title}</strong><hr class="title-line"><div class="item-subtext">${item.subtext}</div>`;
+                    itemEl.innerHTML = `<strong class="item-title" style="background:${item.color}">${item.title}</strong><hr class="title-line"><div class="badge text-bg-secondary">${item.subtext}</div>`;
 
                     itemEl.style.top = `${timeToPosition(item.start)}%`;
                     itemEl.style.height = `${timeToPosition(item.end) - timeToPosition(item.start)}%`;
                     itemEl.style.left = `${samestart * 25}px`;
                     if (lastclicked == offerId) {
-                        itemEl.style.border = "5px solid pink";
+                        itemEl.style.border = "5px solid #FB6D48";
+
                     }
 
                     itemEl.addEventListener('mouseover', function () {
@@ -589,6 +592,12 @@
                         itemEl.style.zIndex = 1;  // zurücksetzen
                     });
                     itemEl.addEventListener('click', function () {
+
+                        if (localStorage.getItem('loggedIn') !== 'true') {
+                            alert("Bitte loggen Sie sich ein");
+                            return;
+                        }
+
                         var curday = dayNames[1 + count];
                         try {
                             var eventtype = item.title.match(/\(([^)]+)\)/)[1].split("-")[0];
@@ -789,6 +798,27 @@
             return parsedName;
         }
 
+        if (localStorage.getItem('tempCalendar') != null && localStorage.getItem('loggedIn') !== 'true') {
+            showIcalCalendar(window.ical.parseICS(localStorage.getItem('tempCalendar')));
+        } else if (localStorage.getItem('uploadLocalCalendar') === 'true') {
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: data,
+                credentials: 'include'
+            }).then(response => {
+                if (response.ok) {
+                    localStorage.removeItem('uploadLocalCalendar');
+                    localStorage.removeItem('tempCalendar');
+                    alert("Dein Temporärer Kalender wurde erfolgreich hochgeladen");
+                    getMyCalendar();
+                } else {
+                    alert("Fehler beim Hochladen des Kalenders");
+                }
+            });
+        }
 
     </script>
 

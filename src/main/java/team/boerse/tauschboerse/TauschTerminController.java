@@ -193,12 +193,17 @@ public class TauschTerminController {
         }
 
         List<TauschTermin> termine = tauschTerminRepository.findTauschTerminByUserid(user.getId());
+        int count = termine.size();
 
         for (TauschTermin termin : termine) {
             if (termin.angebot.getName().indexOf(angebot.angebot.title()) != -1) {
 
                 tauschTerminRepository.delete(termin);
+                count--;
             }
+        }
+        if (count >= 2) {
+            return ResponseEntity.status(403).body("You can only have 2 offers at the same time");
         }
 
         KalenderTermin[] gesucht = new KalenderTermin[angebot.gesucht.length];

@@ -68,7 +68,6 @@ public class KalenderController {
             return;
         }
         Kalender oldkalender = kalenderRepository.findByUserId(user.getId());
-
         StringReader sin = new StringReader(icsFile);
         CalendarBuilder builder = new CalendarBuilder();
         net.fortuna.ical4j.model.Calendar calendar = builder.build(sin);
@@ -84,6 +83,9 @@ public class KalenderController {
         kalender.setTermine(termine);
         if (oldkalender != null) {
             kalenderRepository.delete(oldkalender);
+            for (TauschTermin termin : tauschTerminRepository.findTauschTerminByUserid(user.getId())) {
+                tauschTerminRepository.delete(termin);
+            }
         }
         kalenderRepository.save(kalender);
     }
@@ -227,7 +229,7 @@ public class KalenderController {
                         }
                     }
                     if (!found) {
-                        String colorcodelightblue = "#5d7a8f";
+                        String colorcodelightblue = "rgba(227, 227, 227, 0.4)";
                         day.add(new KalenderTerminDTO(title, "",
                                 colorcodelightblue, starts[j],
                                 ends[j], -1));
