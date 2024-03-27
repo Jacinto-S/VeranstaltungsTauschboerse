@@ -2,6 +2,8 @@ package team.boerse.tauschboerse;
 
 import java.util.List;
 
+import org.springframework.data.annotation.CreatedDate;
+
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -10,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 
 import java.util.ArrayList;
+import java.util.Date;
 
 @Entity
 public class Kalender {
@@ -22,6 +25,9 @@ public class Kalender {
 
     @OneToMany(cascade = CascadeType.ALL)
     List<KalenderTermin> termine = new ArrayList<>();
+
+    @CreatedDate
+    Date createDate;
 
     public long getUserId() {
         return userId;
@@ -37,5 +43,9 @@ public class Kalender {
 
     public void setTermine(List<KalenderTermin> termine) {
         this.termine = termine;
+    }
+
+    public Date getCreateDate() {
+        return createDate;
     }
 }

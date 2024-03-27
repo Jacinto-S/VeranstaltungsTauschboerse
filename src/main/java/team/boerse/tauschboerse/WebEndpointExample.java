@@ -91,6 +91,10 @@ public class WebEndpointExample {
 		} catch (UnknownHostException e) {
 			return ResponseEntity.badRequest().body("Invalid IP");
 		}
+		User user = userRepository.findByHsMail(hsMail).orElse(null);
+		if (user != null && user.isBanned()) {
+			return ResponseEntity.status(403).body("User is banned: " + user.getBanReason());
+		}
 
 		String token = UUID.randomUUID().toString();
 		tokens.put(token, hsMail);

@@ -16,7 +16,7 @@
         crossorigin="anonymous"></script>
 
 
-    <nav class="navbar navbar-expand-sm bg-dark sticky-top" data-bs-theme="dark">
+    <nav class="navbar navbar-expand-sm bg-dark" data-bs-theme="dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">Tauschbörse</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown"
@@ -52,6 +52,53 @@
             position: relative;
         }
 
+        #uploadHint {
+            opacity: 0.825;
+        }
+
+        #uploadHint:hover {
+            opacity: 1;
+        }
+
+        @media (max-width: 768px) {
+            .week-calendar {
+                grid-template-columns: repeat(5, 1fr);
+            }
+
+            #titlebr {
+                display: none;
+            }
+
+            #title {
+                font-size: 1em;
+            }
+
+            .time-scale {
+                display: none;
+            }
+
+            .item {
+                width: 100% !important;
+                min-width: 100% !important;
+            }
+
+            .day-header {
+                overflow: hidden;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 576px) {
+            #calendarContainer {
+                padding-left: 0px !important;
+                padding-right: 0px !important;
+            }
+        }
+
+
+
+
+
         .time-scale div {
             position: absolute;
             width: 100%;
@@ -64,10 +111,17 @@
         .day {
             position: relative;
             padding-top: 25px;
-            border-top: none;
             height: 600px;
-            border: 1px solid #ccc;
+            border-right: 1px solid #ccc;
+            border-bottom: 1px solid #ccc;
+            border-top: 1px solid #ccc;
         }
+
+        .day:nth-child(2) {
+            border-left: 1px solid #ccc;
+        }
+
+
 
         .day-header {
             position: absolute;
@@ -80,6 +134,11 @@
 
         .item-title {
             font-size: 1em;
+            color: black;
+            user-select: none;
+            -moz-user-select: none;
+            -webkit-user-select: none;
+
         }
 
         .item {
@@ -87,7 +146,6 @@
             cursor: pointer;
             padding: 5px;
             border-radius: 4px;
-            border: 1px solid black;
             z-index: 1;
             overflow: hidden;
             width: 80px;
@@ -113,21 +171,61 @@
         }
     </style>
 
-
-    <div style="padding:10px;" class="container">
+    <div class="container">
         <h1 id="title">Wochenkalender</h1>
-        <br>
-        <div class="week-calendar" id="weekCalendar"></div>
+        <br id="titlebr">
+    </div>
+    <div id="calendarContainer" class="container">
+        <div class="week-calendar" id="weekCalendar">
+            <!-- Platzhalter um Layoutshift zu verhindern -->
+            <div class="time-scale">
+                <div style="top: 7.69231%;">8:00</div>
+                <div style="top: 15.3846%;">9:00</div>
+                <div style="top: 23.0769%;">10:00</div>
+                <div style="top: 30.7692%;">11:00</div>
+                <div style="top: 38.4615%;">12:00</div>
+                <div style="top: 46.1538%;">13:00</div>
+                <div style="top: 53.8462%;">14:00</div>
+                <div style="top: 61.5385%;">15:00</div>
+                <div style="top: 69.2308%;">16:00</div>
+                <div style="top: 76.9231%;">17:00</div>
+                <div style="top: 84.6154%;">18:00</div>
+                <div style="top: 92.3077%;">19:00</div>
+                <div style="top: 100%;">20:00</div>
+            </div>
+            <div class="day">
+                <div class="day-header">Mo</div>
+            </div>
+            <div class="day">
+                <div class="day-header">Di</div>
+            </div>
+            <div class="day">
+                <div class="day-header">Mi</div>
+                <div class="item bg-secondary text-white" id="uploadHint"
+                    onclick="document.getElementById('fileupload').click();"
+                    style="display: none;top: 45%;text-align: center;position: absolute;left: calc(50%);transform: translate(-50%, -50%);cursor: pointer;">
+                    ICS Datei hochladen
+                </div>
+            </div>
+            <div class="day">
+                <div class="day-header">Do</div>
+            </div>
+            <div class="day">
+                <div class="day-header">Fr</div>
+            </div>
+        </div>
 
         <br>
-        <button class="btn btn-primary" id="confirmOffer" style="display: none;">Angebot erstellen</button>
+        <button class="btn btn-primary" id="confirmOffer" style="visibility: hidden;">Angebot erstellen</button>
+    </div>
+    <div class="container">
         <br>
         <br>
 
         <h2>Kalender hochladen</h2>
         <p>Bitte lade deinen Stundenplan von<br><a id="aorurl"
                 href="#">https://aor.cs.hs-rm.de/plans.ics?user_plan=true</a>
-            <br>als .ics Datei hoch
+            <br>als .ics Datei hoch <span style="opacity: 0.7;">(Rechtsklick -> Link speichern unter)</span>
         </p>
         <script>
             var aorurl = document.getElementById('aorurl');
@@ -144,13 +242,13 @@
             });
 
         </script>
-        <div class="input-group mb-3" style="max-width: 500px;">
+        <div class="input-group mb-3" style="max-width: 500px;margin-bottom: 0.1rem!important;">
             <input type="file" class="form-control" id="fileupload" accept=".ics">
             <button id="submitfileupload" class="btn btn-primary" disabled>Hochladen</button>
-            <span style="opacity: 0.7;font-size: small;padding-top: 5px;">Vorsicht! Beim Hochladen eines neuen Kalenders
-                werden alle deine Angebote
-                entfernt</span>
         </div>
+        <span style="opacity: 0.7;font-size: small;">Vorsicht! Beim Hochladen eines neuen Kalenders
+            werden alle deine Angebote
+            entfernt</span>
 
 
 
@@ -346,6 +444,7 @@
 
         file.addEventListener('change', function () {
             submit.disabled = false;
+            submit.focus();
         });
 
         function showUploadedCalendar() {
@@ -464,8 +563,9 @@
                 showCalendar(data);
             });
         }
-        getMyCalendar();
-
+        if (localStorage.getItem('loggedIn') === 'true') {
+            getMyCalendar();
+        }
 
 
 
@@ -487,35 +587,42 @@
                     var parsedStartDate = startDate.getHours() + ":" + (startDate.getMinutes() < 10 ? '0' : '') + startDate.getMinutes();
                     var parsedEndDate = endDate.getHours() + ":" + (endDate.getMinutes() < 10 ? '0' : '') + endDate.getMinutes();
                     var title = parsedElement.summary;
-                    var eventtype = title.match(/\(([^)]+)\)/)[1].split("-")[0];
-                    var event = {
-                        title: title,
-                        subtext: '',
-                        color: 'lightgreen',
-                        start: parsedStartDate,
-                        end: parsedEndDate
-                    };
-                    switch (eventtype) {
-                        case "V":
-                            event.color = '#4961E1';
-                            break;
-                        case "P":
-                            event.color = '#F4A460';
-                            break;
-                        case "Ü":
-                            event.color = '#32CD32';
-                            break;
-                        case "S":
-                            event.color = '#556B2F';
-                            break;
-                        default:
-                            event.color = 'grey';
-                    }
+                    try {
+                        var eventtype = title.match(/\(([^)]+)\)/)[1].split("-")[0];
+                        var event = {
+                            title: title,
+                            subtext: '',
+                            color: 'lightgreen',
+                            start: parsedStartDate,
+                            end: parsedEndDate
+                        };
+                        switch (eventtype) {
+                            case "V":
+                                event.color = '#4961E1';
+                                break;
+                            case "P":
+                                event.color = '#F4A460';
+                                break;
+                            case "Ü":
+                                event.color = '#32CD32';
+                                break;
+                            case "S":
+                                event.color = '#556B2F';
+                                break;
+                            default:
+                                event.color = 'grey';
+                        }
 
-                    var selectDay = startDate.getDay() - 1;
-                    items[selectDay].push(event);
+                        var selectDay = startDate.getDay() - 1;
+                        items[selectDay].push(event);
+                    } catch (error) {
+                        localStorage.removeItem('tempCalendar');
+                        alert("Fehler beim Parsen des Kalenders");
+                        return;
+                    }
                 }
             }
+            window.scrollTo(0, 0);
             showCalendar(items);
         }
         var lastclicked = -1;
@@ -575,7 +682,7 @@
                     }
                     currentstart = item.start;
 
-                    itemEl.innerHTML = `<strong class="item-title" style="background:${item.color}">${item.title}</strong><hr class="title-line"><div class="badge text-bg-secondary">${item.subtext}</div>`;
+                    itemEl.innerHTML = `<strong class="item-title">${item.title}</strong><hr class="title-line"><div class="badge text-bg-secondary">${item.subtext}</div>`;
 
                     itemEl.style.top = `${timeToPosition(item.start)}%`;
                     itemEl.style.height = `${timeToPosition(item.end) - timeToPosition(item.start)}%`;
@@ -591,10 +698,20 @@
                     itemEl.addEventListener('mouseout', function () {
                         itemEl.style.zIndex = 1;  // zurücksetzen
                     });
+
+                    try {
+                        var eventtype = item.title.match(/\(([^)]+)\)/)[1].split("-")[0];
+                        if (eventtype == "V") {
+                            itemEl.style.cursor = "not-allowed";
+                        }
+                    } catch (error) {
+
+                    }
+
                     itemEl.addEventListener('click', function () {
 
                         if (localStorage.getItem('loggedIn') !== 'true') {
-                            alert("Bitte loggen Sie sich ein");
+                            alert("Bitte logge dich ein um Tauschangebote anzusehen");
                             return;
                         }
 
@@ -608,7 +725,7 @@
 
                         }
                         if (state == 1 && item.subtext.includes("OFFER") && item.subtext.indexOf("ICH") == -1) {
-                            if (confirm("Willst du das Angebot annehmen: " + offerId)) {
+                            if (confirm("Willst du das Angebot annehmen?")) {
                                 var url = "";
                                 if (isDev()) {
                                     url = "http://localhost:8085/acceptOffer";
@@ -657,7 +774,7 @@
                                 state = 0;
                                 lastclicked = -1;
                                 itemEl.style.border = "1px solid black";
-                                document.getElementById('confirmOffer').style.display = "none";
+                                document.getElementById('confirmOffer').style.visibility = "hidden";
                                 gesucht = [];
                                 offer = null;
                                 getMyCalendar();
@@ -686,7 +803,7 @@
                             state = 1;
                             lastclicked = offerId;
                             itemEl.style.border = "5px solid pink";
-                            document.getElementById('confirmOffer').style.display = "block";
+                            document.getElementById('confirmOffer').style.visibility = "visible";
                             document.getElementById('confirmOffer').disabled = "true";
                             offer = {
                                 offerid: offerId,
@@ -737,6 +854,7 @@
 
                 calendarEl.appendChild(dayEl);
             });
+            resizeDayHeaders();
         }
 
         var whoamiurl = "/";
@@ -761,10 +879,18 @@
                 document.getElementById('title').innerText = "Wochenkalender (Nicht eingeloggt)";
                 document.getElementById('removeAllOvers').style.display = "none";
                 document.getElementById('logoutbtn').style.display = "none";
-                document.getElementById('confirmOffer').style.display = "none";
+                document.getElementById('confirmOffer').style.visibility = "hidden";
+                if (document.getElementById('uploadHint') != null) {
+                    document.getElementById('uploadHint').style.display = "block";
+                }
             }
         }
         manageVisibility();
+        if (loggedIn && localStorage.getItem('whoami') != null) {
+            whoamidata = localStorage.getItem('whoami');
+            document.getElementById('title').innerText = "Wochenkalender für " + whoamidata;
+        }
+
         fetch(whoamiurl, {
             method: 'GET',
             credentials: 'include'
@@ -776,6 +902,7 @@
                         localStorage.setItem('loggedIn', "true");
                         whoamidata = data;
                         document.getElementById('title').innerText = "Wochenkalender für " + extractName(whoamidata);
+                        localStorage.setItem('whoami', extractName(whoamidata));
                         manageVisibility();
                     } else {
                         localStorage.removeItem('loggedIn');
@@ -797,6 +924,12 @@
             let parsedName = givenName + " " + familyName;
             return parsedName;
         }
+        var url = "";
+        if (isDev()) {
+            url = "http://localhost:8085/uploadKalender";
+        } else {
+            url = "/uploadKalender";
+        }
 
         if (localStorage.getItem('tempCalendar') != null && localStorage.getItem('loggedIn') !== 'true') {
             showIcalCalendar(window.ical.parseICS(localStorage.getItem('tempCalendar')));
@@ -806,7 +939,7 @@
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: data,
+                body: localStorage.getItem('tempCalendar'),
                 credentials: 'include'
             }).then(response => {
                 if (response.ok) {
@@ -857,6 +990,27 @@
                                 document.getElementsByTagName('html')[0].setAttribute('data-bs-theme', darkswitch.checked ? 'dark' : 'light');
 
                             });
+
+                            var largeDayHeaders = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
+                            var smallDayHeaders = ["Mo", "Di", "Mi", "Do", "Fr"];
+
+                            function resizeDayHeaders() {
+                                var dayHeaders = document.querySelectorAll('.day-header');
+                                for (var i = 0; i < dayHeaders.length; i++) {
+                                    if (window.innerWidth < 768) {
+                                        dayHeaders[i].innerText = smallDayHeaders[i];
+                                    } else {
+                                        dayHeaders[i].innerText = largeDayHeaders[i];
+                                    }
+                                }
+                            }
+
+                            window.addEventListener('resize', function () {
+                                resizeDayHeaders();
+                            });
+                            resizeDayHeaders();
+
+
 
 
                         </script>

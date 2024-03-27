@@ -28,7 +28,7 @@ public class CustomTokenFilter extends OncePerRequestFilter {
         if (token != null) {
             us = userRepository.findByAccessToken(token);
             String sessionToken = us == null ? null : us.getAccessToken();
-            if (us == null) {
+            if (us == null || us.isBanned()) {
                 Cookie cookie = new Cookie("sessionToken", null);
                 cookie.setMaxAge(0);
                 cookie.setPath("/");

@@ -3,7 +3,7 @@ package team.boerse.tauschboerse;
 public enum KalenderTerminType {
 
     UNKNOWN("Unbekannt", "Unbekannt", "#000000"),
-    V("Vorlesung", "Vorlesung", "#4961e1"),
+    V("Vorlesung", "Vorlesung", "#7F90EA"),
     P("Praktikum", "Praktikum", "#f4a460"),
     S("Seminar", "Seminar", "#556b2f"),
     U("Übung", "Übung", "#32cd32");

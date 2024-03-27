@@ -114,7 +114,7 @@ public class KalenderController {
             throws JsonProcessingException {
         User user = UserUtil.getUser();
         if (user == null) {
-            return null;
+            return ResponseEntity.badRequest().body("No user found");
         }
         Kalender kalender = kalenderRepository.findByUserId(user.getId());
         if (kalender == null) {

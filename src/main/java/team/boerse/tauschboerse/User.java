@@ -15,7 +15,7 @@ public class User {
     private String hsMail;
     private String privateMail;
     private String accessToken;
-    private Boolean isBanned;
+    private Boolean isBanned = false;
     private String banReason;
 
     public User(String hsMail, String privateMail,
@@ -55,16 +55,16 @@ public class User {
         this.accessToken = accessToken;
     }
 
-    public Boolean getIsBanned() {
+    public Boolean isBanned() {
         return isBanned;
     }
 
-    public void setIsBanned(Boolean isBanned) {
+    public void setBanned(Boolean isBanned) {
         this.isBanned = isBanned;
     }
 
     public String getBanReason() {
-        return banReason;
+        return banReason == null ? "" : banReason;
     }
 
     public void setBanReason(String banReason) {
