@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -24,7 +25,7 @@ import team.boerse.tauschboerse.mail.MailUtils;
 
 @EnableScheduling
 @RestController
-public class WebEndpointExample {
+public class LoginManagment {
 
 	@Autowired
 	UserRepository userRepository;
@@ -66,6 +67,9 @@ public class WebEndpointExample {
 
 	}
 
+	@Value("${domain}")
+	String domain;
+
 	@GetMapping("/requestLogin")
 	public ResponseEntity<String> requestLogin(@RequestParam String hsMail, HttpServletRequest request,
 			HttpServletResponse response) {
@@ -79,10 +83,10 @@ public class WebEndpointExample {
 			if (requestCounter.containsKey(ip)) {
 				requestCounter.put(ip, requestCounter.get(ip) + 1);
 				lastRequest.put(ip, System.currentTimeMillis());
-				if (requestCounter.get(ip) > Integer.parseInt(amountOfRequest)) {
-					if (lastRequest.get(ip) + 1000 * 60 * 60 * 6 > System.currentTimeMillis()) {
-						return ResponseEntity.badRequest().body("Too many requests");
-					}
+				if (requestCounter.get(ip) > Integer.parseInt(amountOfRequest)
+						&& (lastRequest.get(ip) + 1000 * 60 * 60 * 6 > System.currentTimeMillis())) {
+					return ResponseEntity.badRequest().body("Too many requests");
+
 				}
 			} else {
 				requestCounter.put(ip, 1);
@@ -92,7 +96,7 @@ public class WebEndpointExample {
 			return ResponseEntity.badRequest().body("Invalid IP");
 		}
 		User user = userRepository.findByHsMail(hsMail).orElse(null);
-		if (user != null && user.isBanned()) {
+		if (user != null && (user.isBanned() != null && user.isBanned())) {
 			return ResponseEntity.status(403).body("User is banned: " + user.getBanReason());
 		}
 
@@ -100,7 +104,8 @@ public class WebEndpointExample {
 		tokens.put(token, hsMail);
 		removeTimerForTokens.put(token, System.currentTimeMillis() + 1000 * 60 * 10);
 
-		MailUtils.sendMail(hsMail, "Login", "Click here to login:\n http://localhost:5173/?logintoken=" + token);
+		MailUtils.sendMail(hsMail, null, "Anmeldelink für die Tauschbörse",
+				"Klicke hier um dich anzumelden:\n " + domain + "/?logintoken=" + token);
 
 		return ResponseEntity.ok().build();
 	}
@@ -126,7 +131,7 @@ public class WebEndpointExample {
 		}
 		user.setAccessToken(accessToken);
 		Cookie cookie = new Cookie("sessionToken", user.getAccessToken());
-		cookie.setMaxAge(60 * 60 * 24);
+		cookie.setMaxAge(60 * 60 * 24 * 30);
 		cookie.setHttpOnly(true);
 		cookie.setPath("/");
 		response.setHeader("Set-Cookie", UserUtil.convertCookieToSetCookie(cookie));
@@ -164,6 +169,17 @@ public class WebEndpointExample {
 			return "Not logged in";
 		}
 		return user.getHsMail();
+	}
+
+	@GetMapping("/updatePrivateMail")
+	public ResponseEntity<String> updatePrivateMail(@RequestParam String privateMail) {
+		User user = UserUtil.getUser();
+		if (user == null) {
+			return ResponseEntity.badRequest().body("User not logged in");
+		}
+		user.setPrivateMail(privateMail);
+		userRepository.save(user);
+		return ResponseEntity.ok().build();
 	}
 
 }

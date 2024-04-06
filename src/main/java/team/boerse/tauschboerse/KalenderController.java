@@ -18,16 +18,16 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import net.fortuna.ical4j.data.CalendarBuilder;
 import net.fortuna.ical4j.data.ParserException;
 import net.fortuna.ical4j.model.DateTime;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 @RestController
 public class KalenderController {
 
-    // list all calendar entries
     @Autowired
     private KalenderTerminRepository kalenderTerminRepository;
     @Autowired
@@ -90,25 +90,6 @@ public class KalenderController {
         kalenderRepository.save(kalender);
     }
 
-    @GetMapping("/findTest")
-    public ResponseEntity<TauschTermin> findTest() {
-        User user = UserUtil.getUser();
-        if (user == null) {
-            return null;
-        }
-        Kalender kalender = kalenderRepository.findByUserId(user.getId());
-        if (kalender == null) {
-            return null;
-        }
-        KalenderTermin termin = kalenderTerminRepository.findById(107l).orElse(null);
-        if (termin == null) {
-            return null;
-        }
-        TauschTermin tausch = tauschTerminRepository.findTauschTerminByGesucht(termin);
-        return ResponseEntity.ok(tausch);
-
-    }
-
     @GetMapping(value = "/myKalender", produces = "application/json")
     public ResponseEntity<String> getKalender(@RequestParam(required = false) String terminid)
             throws JsonProcessingException {
@@ -138,12 +119,13 @@ public class KalenderController {
             kalenderList.get(day).add(terminDTO);
         }
 
-        // fill each day with empty entries to have 6 entries per day in the frontend.
-        // 8:15, 10:00, 11:45, 14:15, 16:00, 17:45
+        // User wants to see possible offers for a specific termin
         if (terminid != null) {
             String[] starts = { "08:15", "10:00", "11:45", "14:15", "16:00", "17:45" };
             String[] ends = { "09:45", "11:30", "13:15", "15:45", "17:30", "19:15" };
             List<TauschTermin> termine = tauschTerminRepository.findAll();
+            termine.sort((a, b) -> a.gesucht.size() - b.gesucht.size());
+
             KalenderTermin usersTermin = kalenderTerminRepository.findById(Long.parseLong(terminid))
                     .orElse(null);
             if (usersTermin == null) {
@@ -163,11 +145,8 @@ public class KalenderController {
 
                 if (termin.userid != user.getId() && usersTermin.getType() == termin.angebot.getType()) {
                     KalenderTermin kalenderTermin = termin.angebot;
-                    // is usersTermin on the same day and time?
-                    if (!usersTermin.getStart().equals(kalenderTermin.getStart())
-                            && usersTermin.getName().indexOf(title) != -1) {
-
-                    } else {
+                    if (usersTermin.getStart().equals(kalenderTermin.getStart())
+                            && usersTermin.getName().indexOf(title) == -1) {
                         continue;
                     }
                     for (KalenderTermin ge : termin.gesucht) {
@@ -191,7 +170,18 @@ public class KalenderController {
                                     angebot.getType().getColorCode(), angebotstart, angebotend, angebot.id);
                             c.setTime(angebot.getStart());
                             int theday = c.get(Calendar.DAY_OF_WEEK) - 2;
-                            kalenderList.get(theday).add(terminDTO);
+
+                            boolean found = false;
+                            for (KalenderTerminDTO check : kalenderList.get(theday)) {
+                                if (check.start().equalsIgnoreCase(terminDTO.start())
+                                        && check.end().equalsIgnoreCase(terminDTO.end())) {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) {
+                                kalenderList.get(theday).add(terminDTO);
+                            }
                             break;
                         }
 
@@ -242,21 +232,10 @@ public class KalenderController {
 
         String json = objectMapper.writeValueAsString(kalenderList);
         return ResponseEntity.ok(json);
-
-        // MAGIC
     }
 
-    // {
-    // "title": "CG (V)",
-    // "subtext": "",
-    // "color": "#4961E1",
-    // "start": "11:45",
-    // "end": "13:15"
-    // }
-    // build record
-
     record KalenderTerminDTO(String title, String subtext, String color, String start, String end, long offerid) {
-    };
+    }
 
     private KalenderTermin getTermin(net.fortuna.ical4j.model.Component component) throws ParseException {
         KalenderTermin termin = new KalenderTermin();

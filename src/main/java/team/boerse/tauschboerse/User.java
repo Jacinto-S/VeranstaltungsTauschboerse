@@ -1,22 +1,22 @@
 package team.boerse.tauschboerse;
 
-import java.util.UUID;
-
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 
 @Entity
 public class User {
 
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
     private String hsMail;
     private String privateMail;
     private String accessToken;
-    private Boolean isBanned = false;
+    private Boolean isBanned;
     private String banReason;
+    private Boolean isAdmin;
 
     public User(String hsMail, String privateMail,
             String accessToken,
@@ -69,6 +69,10 @@ public class User {
 
     public void setBanReason(String banReason) {
         this.banReason = banReason;
+    }
+
+    public Boolean isAdmin() {
+        return isAdmin;
     }
 
     // Getter, Setter und Konstruktoren hier...

@@ -1,25 +1,20 @@
 package team.boerse.tauschboerse.config;
 
-import java.io.IOException;
 import java.util.Arrays;
-import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
-import org.springframework.security.config.annotation.web.headers.FrameOptionsDsl;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.web.DefaultSecurityFilterChain;
-import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
+import org.springframework.web.servlet.resource.PathResourceResolver;
 
 import team.boerse.tauschboerse.UserRepository;
 
@@ -37,7 +32,7 @@ public class WebSecurityConfig {
         // unterstützt. Authentifizierte Requests sind gegen csrf geschützt.
         http.csrf(o -> o.disable());
         http.authorizeHttpRequests(
-                (requests) -> requests.requestMatchers("/**")
+                (requests) -> requests.requestMatchers("/**", "/assets/**")
                         .permitAll());
 
         http.addFilterBefore(CustomTokenFilter(), UsernamePasswordAuthenticationFilter.class);
@@ -58,7 +53,7 @@ public class WebSecurityConfig {
     CorsConfigurationSource corsConfigurationSource() {
 
         if (allowedOrigins == null || allowedOrigins.equals("*")) {
-            allowedOrigins = "http://localhost:5173";
+            allowedOrigins = "http://localhost:5173,http://192.168.178.28:5173,https://tauschboerse.nkwebservices.de";
         }
 
         CorsConfiguration configuration = new CorsConfiguration();
@@ -68,6 +63,7 @@ public class WebSecurityConfig {
         configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
+
         return source;
 
     }

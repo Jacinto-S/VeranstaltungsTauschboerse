@@ -39,3 +39,5 @@ maven-wrapper.jar
 maven-wrapper.properties
 
 mailpw.txt
+
+\src\main\resources\static\dist\*

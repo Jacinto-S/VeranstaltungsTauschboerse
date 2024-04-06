@@ -1,11 +1,13 @@
 package team.boerse.tauschboerse;
 
 import java.util.Date;
+import java.util.List;
 
 import org.springframework.data.annotation.CreatedDate;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -22,16 +24,17 @@ public class TauschTermin {
     long userid;
     @OneToOne(cascade = CascadeType.ALL)
     KalenderTermin angebot;
-    @OneToMany(cascade = CascadeType.ALL)
-    KalenderTermin[] gesucht;
+    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    List<KalenderTermin> gesucht;
 
     @CreatedDate
     Date createdDate;
 
-    public TauschTermin(long userid, KalenderTermin angebot, KalenderTermin[] gesucht) {
+    public TauschTermin(long userid, KalenderTermin angebot, List<KalenderTermin> gesucht) {
         this.userid = userid;
         this.angebot = angebot;
         this.gesucht = gesucht;
+        this.createdDate = new Date();
     }
 
     public TauschTermin() {
@@ -44,6 +47,18 @@ public class TauschTermin {
 
     public long getUserId() {
         return userid;
+    }
+
+    public KalenderTermin getAngebot() {
+        return angebot;
+    }
+
+    public List<KalenderTermin> getGesucht() {
+        return gesucht;
+    }
+
+    public long getId() {
+        return id;
     }
 
 }

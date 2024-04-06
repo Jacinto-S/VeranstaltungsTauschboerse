@@ -1,0 +1,162 @@
+.week-calendar {
+    display: grid;
+    grid-template-columns: 50px repeat(5, 1fr);
+
+    /* Platz für die Zeitskala */
+    gap: 0px;
+
+    width: auto;
+}
+
+.time-scale {
+    height: 600px;
+    position: relative;
+}
+
+#uploadHint {
+    opacity: 0.825;
+}
+
+#uploadHint:hover {
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    .week-calendar {
+        grid-template-columns: repeat(5, 1fr);
+    }
+
+    #titlebr {
+        display: none;
+    }
+
+    #title {
+        font-size: 1em;
+    }
+
+    .time-scale {
+        display: none;
+    }
+
+    .item {
+        width: 100% !important;
+        min-width: 100% !important;
+    }
+
+    .day-header {
+        overflow: hidden;
+        text-align: center;
+    }
+}
+
+@media (max-width: 576px) {
+    #calendarContainer {
+        padding-left: 0px !important;
+        padding-right: 0px !important;
+    }
+}
+
+
+
+
+
+.time-scale div {
+    position: absolute;
+    width: 100%;
+    font-size: 1em;
+    text-align: right;
+    padding-right: 10px;
+}
+
+
+.day {
+    position: relative;
+    padding-top: 25px;
+    height: 600px;
+    border-right: 1px solid #ccc;
+    border-bottom: 1px solid #ccc;
+    border-top: 1px solid #ccc;
+}
+
+.day:nth-child(2) {
+    border-left: 1px solid #ccc;
+}
+
+
+
+.day-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    border-bottom: 1px solid #ccc;
+    text-align: center;
+}
+
+.item-title {
+    font-size: 1em;
+    color: black;
+    user-select: none;
+    -moz-user-select: none;
+    -webkit-user-select: none;
+
+}
+
+.item {
+    position: absolute;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+    z-index: 1;
+    overflow: hidden;
+    width: 128px;
+    min-width: 128px;
+    font-size: 12px;
+}
+
+@media (min-width: 990px) {
+    .item {
+        width: 70%;
+        min-width: auto;
+        left: calc(15.5%) !important;
+    }
+}
+
+
+
+
+
+
+.title-line {
+    margin: 0;
+    border: 0;
+    border-top: 1px solid black;
+    width: 100%;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+
+}
+
+.item-subtext {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+#ratings {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    min-height: 160px;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+    #ratings {
+        grid-template-columns: 1fr;
+        max-height: 480px;
+        min-height: 480px;
+    }
+}

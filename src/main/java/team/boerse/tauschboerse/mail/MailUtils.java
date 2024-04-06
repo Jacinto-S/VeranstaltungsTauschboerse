@@ -22,14 +22,14 @@ import jakarta.mail.internet.MimeMessage;
 @EnableScheduling
 public class MailUtils {
 
-    record Mail(String to, String subject, String text) {
+    record Mail(String to, String cc, String subject, String text) {
     }
 
     private static Logger logger = LoggerFactory.getLogger(MailUtils.class);
 
-    public static void sendMail(String to, String subject, String text) {
+    public static void sendMail(String to, String cc, String subject, String text) {
         logger.info("Sending mail to " + to + " with subject " + subject + " and text " + text);
-        mails.add(new Mail(to, subject, text));
+        mails.add(new Mail(to, cc, subject, text));
     }
 
     private static ArrayList<Mail> mails = new ArrayList<>();
@@ -42,27 +42,29 @@ public class MailUtils {
         Mail mail = mails.remove(0);
         isSending = true;
         try {
-            sendEmail(mail.to(), mail.subject(), mail.text());
+            sendEmail(mail.to(), mail.cc(), mail.subject(), mail.text());
         } catch (Exception e) {
             e.printStackTrace();
         }
         isSending = false;
     }
 
-    private static void sendEmail(String recipient, String subject, String text) {
-        // SMTP-Server-Einstellungen
-        String smtpHost = "mail.nkwebservices.de"; // Setze hier den Hostnamen deines SMTP-Servers ein
-        int smtpPort = 587; // Port für TLS/STARTTLS
-        String smtpUsername = "tauschboerse@nkwebservices.de"; // Dein SMTP-Benutzername
+    private static void sendEmail(String recipient, String cc, String subject, String text) {
+        String smtpHost = "mail.nkwebservices.de";
+        int smtpPort = 587;
+        String smtpUsername = "tauschboerse@nkwebservices.de";
         String smtpPassword = "";
         try {
             smtpPassword = new String(Files.readAllBytes(new File("C:\\boerse\\tauschboerse\\mailpw.txt").toPath()))
                     .trim();
         } catch (Exception e) {
-            e.printStackTrace();
+            smtpPassword = System.getenv("MAIL_PASSWORD");
+            if (smtpPassword == null) {
+                // Dev-Mode?
+                return;
+            }
         }
 
-        // E-Mail-Eigenschaften und -Session
         Properties props = new Properties();
         props.put("mail.smtp.host", smtpHost);
         props.put("mail.smtp.port", String.valueOf(smtpPort));
@@ -77,14 +79,16 @@ public class MailUtils {
         });
 
         try {
-            // Erstelle eine E-Mail-Nachricht
             Message message = new MimeMessage(session);
             message.setFrom(new InternetAddress(smtpUsername));
+
+            if (cc != null && !cc.isEmpty()) {
+                message.setRecipients(Message.RecipientType.CC, InternetAddress.parse(cc));
+            }
             message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(recipient));
+            message.setHeader("Content-Type", "text/plain; charset=UTF-8");
             message.setSubject(subject);
             message.setText(text);
-
-            // Sende die E-Mail
             Transport.send(message);
             logger.info("E-Mail an " + recipient + " gesendet");
         } catch (MessagingException e) {

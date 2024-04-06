@@ -1,5 +1,7 @@
 package team.boerse.tauschboerse;
 
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,23 +21,27 @@ public class CleanupManager {
 
     Logger logger = LoggerFactory.getLogger(CleanupManager.class);
 
-    @Scheduled(fixedDelay = 1000 * 60 * 60 * 24)
+    @Scheduled(fixedDelay = 1000 * 60 * 60 * 24, initialDelay = 5000)
     public void cleanup() {
         long currentTime = System.currentTimeMillis();
 
         // Delete all entries older than 90 days
-        for (Kalender kalender : kalenderRepository.findAll()) {
+        List<Kalender> kalenderList = kalenderRepository.findAll();
+        for (Kalender kalender : kalenderList) {
             if (kalender.getCreateDate() == null)
                 continue;
             if (kalender.getCreateDate().getTime() < currentTime - 1000 * 60 * 60 * 24 * 90) {
                 logger.info(
-                        "Deleting kalender entry from " + kalender.getUserId() + " because it is older than 90 days");
+                        "Deleting kalender entry from " + kalender.getUserId()
+                                + " because it is older than 90 days");
                 kalenderRepository.delete(kalender);
             }
         }
 
         // Delete all entries older than 21 days
-        for (TauschTermin termin : tauschTerminRepository.findAll()) {
+        List<TauschTermin> terminList = tauschTerminRepository.findAll();
+
+        for (TauschTermin termin : terminList) {
             if (termin.getCreatedDate() == null)
                 continue;
             if (termin.getCreatedDate().getTime() < currentTime - 1000 * 60 * 60 * 24 * 21) {

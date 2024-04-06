@@ -1,8 +1,9 @@
 package team.boerse.tauschboerse;
 
-import java.util.List;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -14,8 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.transaction.Transactional;
 import team.boerse.tauschboerse.mail.MailUtils;
-
-import java.util.Calendar;
 
 @RestController
 public class TauschTerminController {
@@ -95,13 +94,10 @@ public class TauschTerminController {
                 KalenderController.getKalenderType(oldTerminOfUser.getName()));
         newTerminForTauschPartner = kalenderTerminRepository.save(newTerminForTauschPartner);
 
-        // Entferne die alten Termine aus den Kalendern der Benutzer
-        if (kalenderUser != null) {
-            kalenderUser.getTermine().remove(oldTerminOfUser);
-            kalenderUser.getTermine().remove(kalenderTermin);
-            kalenderUser.getTermine().add(newTerminForUser);
-            kalenderRepository.save(kalenderUser);
-        }
+        kalenderUser.getTermine().remove(oldTerminOfUser);
+        kalenderUser.getTermine().remove(kalenderTermin);
+        kalenderUser.getTermine().add(newTerminForUser);
+        kalenderRepository.save(kalenderUser);
 
         Kalender kalenderTauschPartner = kalenderRepository.findByUserId(tauschPartner.getId());
         if (kalenderTauschPartner != null) {
@@ -129,30 +125,30 @@ public class TauschTerminController {
         kalenderTerminRepository.delete(oldTerminOfUser);
         kalenderTerminRepository.delete(kalenderTermin);
         tauschTerminRepository.delete(tauschTermin);
-        // TODO Sende Mail an beide Benutzer
 
         String infosForFrontend = createConfirmationText(user, tauschPartner, newTerminForUser,
                 newTerminForTauschPartner);
         String infosForTauschPartner = createConfirmationText(tauschPartner, user, newTerminForTauschPartner,
                 newTerminForUser);
-        MailUtils.sendMail(user.getHsMail(), "Informationen zum Tausch", infosForFrontend);
+        MailUtils.sendMail(user.getHsMail(), user.getPrivateMail(), "Informationen zum Tausch", infosForFrontend);
 
-        MailUtils.sendMail(tauschPartner.getHsMail(), "Du hast ein Match!", infosForTauschPartner);
+        MailUtils.sendMail(tauschPartner.getHsMail(), tauschPartner.getPrivateMail(), "Du hast ein Match!",
+                infosForTauschPartner);
 
         return ResponseEntity.ok().body(infosForFrontend);
     }
 
     private String createConfirmationText(User user, User tauschPartner, KalenderTermin newTerminForUser,
             KalenderTermin newTerminForTauschPartner) {
-        return "Dein Termin wurde erfolgreich getauscht!\n\n" +
-                "Tauschpartner: " + extractName(tauschPartner.getHsMail()) + "\n\n"
-                + "Der Termin " + newTerminForUser.getName() + " von "
+        return "Die Tauschterminvermittlung war erfolgreich!\n\n" +
+                "Tauschpartner/in: " + extractName(tauschPartner.getHsMail()) + "\n\n"
+                + "Dein Termin " + newTerminForUser.getName() + " von "
                 + convertKalenderTerminToString(newTerminForTauschPartner)
-                + "\n\n"
-                + "wurde nach " + convertKalenderTerminToString(newTerminForUser)
-                + " verschoben.\n\n"
-                + "Du kannst deinen Tauschpartner unter " +
-                tauschPartner.getHsMail() + " erreichen.";
+                + "\n"
+                + "kann mit dem Termin von " + convertKalenderTerminToString(newTerminForUser)
+                + " getauscht werden.\n\n"
+                + "Kontaktiere deine/n Tauschpartner/in unter " +
+                tauschPartner.getHsMail() + " und sagt gemeinsam eurer Lehrkraft Bescheid, dass ihr tauschen möchtet!";
     }
 
     public String convertKalenderTerminToString(KalenderTermin termin) {
@@ -170,7 +166,7 @@ public class TauschTerminController {
 
     }
 
-    private String extractName(String adresse) {
+    public static String extractName(String adresse) {
         String namensTeil = adresse.split("@")[0];
         String[] name = namensTeil.split("\\.");
         String vorname = name[0].toUpperCase().charAt(0) + name[0].substring(1);
@@ -185,6 +181,8 @@ public class TauschTerminController {
     record Angebot(UserKalenderTerminDTO angebot, UserKalenderTerminDTO[] gesucht) {
     }
 
+    @SuppressWarnings("null")
+    @Transactional
     @PostMapping("/createOffer")
     public ResponseEntity<String> createOffer(@RequestBody Angebot angebot) {
         User user = UserUtil.getUser();
@@ -206,10 +204,11 @@ public class TauschTerminController {
             return ResponseEntity.status(403).body("You can only have 2 offers at the same time");
         }
 
-        KalenderTermin[] gesucht = new KalenderTermin[angebot.gesucht.length];
+        List<KalenderTermin> gesucht = new ArrayList<>();
         for (int i = 0; i < angebot.gesucht.length; i++) {
-            gesucht[i] = kalenderTerminRepository.save(convertKalenderTerminDTO(angebot.gesucht[i]));
+            gesucht.add(kalenderTerminRepository.saveAndFlush(convertKalenderTerminDTO(angebot.gesucht[i])));
         }
+
         KalenderTermin terminangebot = kalenderTerminRepository.save(convertKalenderTerminDTO(angebot.angebot));
         TauschTermin tauschTermin = new TauschTermin(user.getId(), terminangebot, gesucht);
 

@@ -1,6 +1,7 @@
 package team.boerse.tauschboerse.config;
 
 import java.io.IOException;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -28,7 +29,7 @@ public class CustomTokenFilter extends OncePerRequestFilter {
         if (token != null) {
             us = userRepository.findByAccessToken(token);
             String sessionToken = us == null ? null : us.getAccessToken();
-            if (us == null || us.isBanned()) {
+            if (us == null || (us.isBanned() != null && us.isBanned())) {
                 Cookie cookie = new Cookie("sessionToken", null);
                 cookie.setMaxAge(0);
                 cookie.setPath("/");
