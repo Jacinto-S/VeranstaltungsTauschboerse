@@ -13,8 +13,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
-import org.springframework.web.servlet.resource.PathResourceResolver;
 
 import team.boerse.tauschboerse.UserRepository;
 
@@ -32,17 +30,17 @@ public class WebSecurityConfig {
         // unterstützt. Authentifizierte Requests sind gegen csrf geschützt.
         http.csrf(o -> o.disable());
         http.authorizeHttpRequests(
-                (requests) -> requests.requestMatchers("/**", "/assets/**")
+                requests -> requests.requestMatchers("/**", "/assets/**")
                         .permitAll());
 
-        http.addFilterBefore(CustomTokenFilter(), UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(customTokenFilter(), UsernamePasswordAuthenticationFilter.class);
 
         http.cors(o -> o.configurationSource(corsConfigurationSource()));
         return http.build();
     }
 
     @Bean
-    public CustomTokenFilter CustomTokenFilter() {
+    CustomTokenFilter customTokenFilter() {
         return new CustomTokenFilter();
     }
 

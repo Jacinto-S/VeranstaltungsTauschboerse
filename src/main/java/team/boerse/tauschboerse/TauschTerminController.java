@@ -126,9 +126,9 @@ public class TauschTerminController {
         kalenderTerminRepository.delete(kalenderTermin);
         tauschTerminRepository.delete(tauschTermin);
 
-        String infosForFrontend = createConfirmationText(user, tauschPartner, newTerminForUser,
+        String infosForFrontend = createConfirmationText(tauschPartner, newTerminForUser,
                 newTerminForTauschPartner);
-        String infosForTauschPartner = createConfirmationText(tauschPartner, user, newTerminForTauschPartner,
+        String infosForTauschPartner = createConfirmationText(user, newTerminForTauschPartner,
                 newTerminForUser);
         MailUtils.sendMail(user.getHsMail(), user.getPrivateMail(), "Informationen zum Tausch", infosForFrontend);
 
@@ -138,7 +138,7 @@ public class TauschTerminController {
         return ResponseEntity.ok().body(infosForFrontend);
     }
 
-    private String createConfirmationText(User user, User tauschPartner, KalenderTermin newTerminForUser,
+    private String createConfirmationText(User tauschPartner, KalenderTermin newTerminForUser,
             KalenderTermin newTerminForTauschPartner) {
         return "Die Tauschterminvermittlung war erfolgreich!\n\n" +
                 "Tauschpartner/in: " + extractName(tauschPartner.getHsMail()) + "\n\n"
@@ -176,7 +176,7 @@ public class TauschTerminController {
     }
 
     record UserKalenderTerminDTO(String title, String subtext, String color, String start, String end, int day) {
-    };
+    }
 
     record Angebot(UserKalenderTerminDTO angebot, UserKalenderTerminDTO[] gesucht) {
     }

@@ -43,7 +43,10 @@ public class CustomTokenFilter extends OncePerRequestFilter {
                 filterChain.doFilter(request, response);
                 return;
             }
-
+        }
+        if (us == null) {
+            filterChain.doFilter(request, response);
+            return;
         }
         ServletRequestAttributes attributes = new ServletRequestAttributes(request);
         attributes.setAttribute("User", us, RequestAttributes.SCOPE_REQUEST);

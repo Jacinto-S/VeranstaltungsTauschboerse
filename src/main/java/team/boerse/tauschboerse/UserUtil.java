@@ -45,9 +45,12 @@ public class UserUtil {
 
     public static User getUser() {
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        User user = attributes != null ? (User) attributes.getAttribute("User", ServletRequestAttributes.SCOPE_REQUEST)
+        return attributes != null ? (User) attributes.getAttribute("User", ServletRequestAttributes.SCOPE_REQUEST)
                 : null;
-        return user;
+    }
+
+    private UserUtil() {
+        throw new IllegalStateException("Utility class");
     }
 
 }

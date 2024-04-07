@@ -31,9 +31,8 @@ public class CleanupManager {
             if (kalender.getCreateDate() == null)
                 continue;
             if (kalender.getCreateDate().getTime() < currentTime - 1000 * 60 * 60 * 24 * 90) {
-                logger.info(
-                        "Deleting kalender entry from " + kalender.getUserId()
-                                + " because it is older than 90 days");
+                logger.info(String.format("Deleting kalender entry from %s because it is older than 90 days",
+                        kalender.getUserId()));
                 kalenderRepository.delete(kalender);
             }
         }
@@ -45,8 +44,8 @@ public class CleanupManager {
             if (termin.getCreatedDate() == null)
                 continue;
             if (termin.getCreatedDate().getTime() < currentTime - 1000 * 60 * 60 * 24 * 21) {
-                logger.info(
-                        "Deleting tauschTermin entry from " + termin.getUserId() + " because it is older than 21 days");
+                logger.info(String.format("Deleting tauschTermin entry from %s because it is older than 21 days",
+                        termin.getUserId()));
                 tauschTerminRepository.delete(termin);
             }
         }

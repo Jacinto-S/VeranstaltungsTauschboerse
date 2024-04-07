@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import net.fortuna.ical4j.data.CalendarBuilder;
 import net.fortuna.ical4j.data.ParserException;
 import net.fortuna.ical4j.model.DateTime;
+import net.fortuna.ical4j.model.component.CalendarComponent;
 
 @RestController
 public class KalenderController {
@@ -74,8 +75,8 @@ public class KalenderController {
         Kalender kalender = new Kalender();
         kalender.setUserId(user.getId());
         List<KalenderTermin> termine = kalender.getTermine();
-        for (Object o : calendar.getComponents()) {
-            net.fortuna.ical4j.model.Component component = (net.fortuna.ical4j.model.Component) o;
+        for (CalendarComponent o : calendar.getComponents()) {
+            net.fortuna.ical4j.model.Component component = o;
             if (component.getName().equals("VEVENT")) {
                 termine.add(getTermin(component));
             }

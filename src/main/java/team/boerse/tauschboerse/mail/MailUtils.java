@@ -28,7 +28,7 @@ public class MailUtils {
     private static Logger logger = LoggerFactory.getLogger(MailUtils.class);
 
     public static void sendMail(String to, String cc, String subject, String text) {
-        logger.info("Sending mail to " + to + " with subject " + subject + " and text " + text);
+        logger.info(String.format("Sending mail to %s with subject %s and text %s", to, subject, text));
         mails.add(new Mail(to, cc, subject, text));
     }
 
@@ -73,6 +73,7 @@ public class MailUtils {
         props.put("mail.smtp.ssl.trust", smtpHost);
         final String finalSmtpPassword = smtpPassword;
         Session session = Session.getInstance(props, new jakarta.mail.Authenticator() {
+            @Override
             protected jakarta.mail.PasswordAuthentication getPasswordAuthentication() {
                 return new jakarta.mail.PasswordAuthentication(smtpUsername, finalSmtpPassword);
             }
@@ -90,7 +91,7 @@ public class MailUtils {
             message.setSubject(subject);
             message.setText(text);
             Transport.send(message);
-            logger.info("E-Mail an " + recipient + " gesendet");
+            logger.info(String.format("E-Mail an %s gesendet", recipient));
         } catch (MessagingException e) {
             e.printStackTrace();
         }
