@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,6 +37,8 @@ public class KalenderController {
     private KalenderRepository kalenderRepository;
     @Autowired
     private TauschTerminRepository tauschTerminRepository;
+
+    Logger logger = LoggerFactory.getLogger(KalenderController.class);
 
     @GetMapping(path = "/kalender", produces = "application/json")
     public Iterable<KalenderTermin> list() {
@@ -88,6 +92,7 @@ public class KalenderController {
                 tauschTerminRepository.delete(termin);
             }
         }
+        logger.info(String.format("User %s uploaded a new calendar", user.getHsMail()));
         kalenderRepository.save(kalender);
     }
 

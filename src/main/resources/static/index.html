@@ -2,7 +2,7 @@
 <html lang="de" data-bs-theme="dark">
 
 <head>
-    <meta charset=" UTF-8">
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tauschbörse</title>
 
@@ -89,10 +89,10 @@
             </div>
             <div class="day">
                 <div class="day-header">Mi</div>
-                <div class="item bg-secondary text-white" id="uploadHint"
+                <div class="bg-secondary text-white" id="uploadHint"
                     onclick="document.getElementById('fileupload').click();"
-                    style="display: none;top: 45%;text-align: center;position: absolute;left: calc(50%)!important;transform: translate(-50%, -50%);cursor: pointer;">
-                    ICS Datei hochladen
+                    style="border-radius: 10px;width: 170px;padding: 5px;display: none;top: 45%;text-align: center;position: absolute;left: calc(50%)!important;transform: translate(-50%, -50%);cursor: pointer;">
+                    ICS Datei hochladen <br>oder hereinziehen
                 </div>
             </div>
             <div class="day">
@@ -122,7 +122,7 @@
         </div>
         <span style="opacity: 0.7;font-size: small;">Vorsicht! Beim Hochladen eines neuen Kalenders
             werden alle deine Angebote
-            entfernt</span>
+            entfernt!</span>
 
         <div class="modal fade" id="loginModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
             <div class="modal-dialog">
@@ -138,12 +138,18 @@
                             Bitte lösche Angebote, die du nicht mehr benötigst und halte dich an die Regeln.
                         </p>
 
-                        <p>Bitte gebe deine Hochschul-Email ein</p>
+                        <p>Bitte gebe deine Hochschul-E-Mail ein</p>
                         <div class="input-group mb-3" style="max-width: 500px;" id="MailBoxGroup">
 
                             <input type="email" class="form-control" id="email" placeholder="email@student.hs-rm.de">
                             </input>
                             <button id="submitemail" class="btn btn-primary">Absenden</button>
+                        </div>
+                        <p>Oder nutze den Demo-Beta-Zugang</p>
+                        <div class="input-group mb-3" style="max-width: 500px;" id="BetaBoxGroup">
+                            <input type="number" min="1" max="100" id="demoLoginInput" class="form-control"
+                                placeholder="Accountnummer 1-100"> </input>
+                            <button class="btn btn-primary" id="demoLogin">Demo-Beta-Zugang</button>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -197,11 +203,11 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body" id="angebotErstelltModalBody">
-                        <p>Dein Angebot wurde erstellt. Wir drücken dir die Daumen. Du kannst zum <span
+                        <p>Dein Angebot wurde erstellt. Wir drücken dir die Daumen! Du kannst zum <span
                                 style="font-weight: bold;">Erfolg</span> beitragen,
                             indem du die Webseite mit anderen teilst.</p>
 
-                        <button class="btn btn-success" id="sharebtn">Jetzt Teilen</button>
+                        <button class="btn btn-success" id="sharebtn">Jetzt teilen</button>
                         <button class="btn btn-primary" id="copylink">Link
                             kopieren</button>
 
@@ -231,7 +237,7 @@
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h4 class="modal-title" id="exampleModalLabel">Herlichen Glückwunsch!</h4>
+                        <h4 class="modal-title" id="exampleModalLabel">Herzlichen Glückwunsch!</h4>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body" id="modalbody">
@@ -334,7 +340,7 @@
                 <h2 class="accordion-header" id="headingFour">
                     <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                         data-bs-target="#collapseFour" aria-expanded="false" aria-controls="collapseFour">
-                        Warum sollte ich zusätzlich meine private Emailadresse angeben?
+                        Warum sollte ich zusätzlich meine private E-Mail-Adresse angeben?
                     </button>
                 </h2>
 
@@ -363,9 +369,9 @@
                 <div id="collapseFive" class="accordion-collapse collapse" aria-labelledby="headingFive"
                     data-bs-parent="#faqAccordion">
                     <div class="accordion-body">
-                        Ihr solltet jetzt eine E-Mail von uns bekommen haben. Darin findest du die jeweiligen
+                        Ihr solltet jetzt beide eine E-Mail von uns bekommen haben. Darin finden sich die jeweiligen
                         Kontaktinformationen.
-                        Ihr könnt jetzt zusammen euren Praktikumsleiter anschreiben oder ansprechen, damit der euch
+                        Ihr könnt jetzt zusammen eure Kursleitung anschreiben oder ansprechen, damit diese euch
                         tauscht.
                     </div>
                 </div>
@@ -375,7 +381,7 @@
                 <h2 class="accordion-header" id="headingSix">
                     <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                         data-bs-target="#collapseSix" aria-expanded="false" aria-controls="collapseSix">
-                        Was ist, wenn Ich keine Antwort erhalte?
+                        Was ist, wenn ich keine Antwort erhalte?
                     </button>
                 </h2>
 
@@ -383,9 +389,9 @@
                 <div id="collapseSix" class="accordion-collapse collapse" aria-labelledby="headingSix"
                     data-bs-parent="#faqAccordion">
                     <div class="accordion-body">
-                        Wenn du Probleme mit deinem Tauschpartner hast und noch mal tauschen möchtest, kannst du den
-                        Prozess von vorn starten.<br>
-                        Dazu lädst du einfach noch mal deinen Stundenplan hoch und wählst einen neuen Tauschtermin
+                        Wenn du Probleme mit deinem Tauschpartner hast und noch einmal tauschen möchtest, kannst du den
+                        Prozess von vorne starten.<br>
+                        Dazu lädst du einfach erneut deinen Stundenplan hoch und wählst einen neuen Tauschtermin
                         aus.<br>
                         Beachte aber bitte, dass dein Tauschpartner sein Leben nicht im E-Mail-Postfach verbringt. Gib
                         ihm etwas Zeit, um dir zu antworten 😊
@@ -427,9 +433,9 @@
 
         <div id="privateMailBox" style="display: none;">
             <h2>Einstellungen</h2>
-            <span>Private Emailadresse <span style="opacity: 0.7;font-size: small;">(Infos in FAQs)</span></span>
+            <span>Private E-Mail-Adresse <span style="opacity: 0.7;font-size: small;">(Infos in den FAQs)</span></span>
             <div class="input-group" style="max-width: 500px;">
-                <input type="text" class="form-control" id="private-mail" placeholder="Private Emailadresse">
+                <input type="text" class="form-control" id="private-mail" placeholder="Private E-Mail-Adresse">
                 <button class="btn btn-primary" id="save-private-mail" disabled>Speichern</button>
             </div>
         </div>

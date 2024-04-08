@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -34,8 +36,10 @@ public class LoginManagment {
 	HashMap<InetAddress, Integer> requestCounter = new HashMap<>();
 	HashMap<InetAddress, Long> lastRequest = new HashMap<>();
 
-	@Value("${amountOfRequest:5}")
-	String amountOfRequest = "5";
+	Logger logger = LoggerFactory.getLogger(LoginManagment.class);
+
+	@Value("${amountOfRequest:5000}")
+	String amountOfRequest = "5000";
 
 	@Scheduled(fixedDelay = 60000)
 	public void removeExpiredTokens() {
@@ -84,6 +88,7 @@ public class LoginManagment {
 				lastRequest.put(ip, System.currentTimeMillis());
 				if (requestCounter.get(ip) > Integer.parseInt(amountOfRequest)
 						&& (lastRequest.get(ip) + 1000 * 60 * 60 * 6 > System.currentTimeMillis())) {
+					logger.warn(String.format("Too many requests from %s", ip));
 					return ResponseEntity.badRequest().body("Too many requests");
 
 				}
@@ -102,9 +107,8 @@ public class LoginManagment {
 		String token = UUID.randomUUID().toString();
 		tokens.put(token, hsMail);
 		removeTimerForTokens.put(token, System.currentTimeMillis() + 1000 * 60 * 10);
-
 		MailUtils.sendMail(hsMail, null, "Anmeldelink für die Tauschbörse",
-				"Klicke hier um dich anzumelden:\n " + domain + "/?logintoken=" + token);
+				"Klicke hier um dich anzumelden:\n" + domain + "/?logintoken=" + token);
 
 		return ResponseEntity.ok().build();
 	}
@@ -137,10 +141,39 @@ public class LoginManagment {
 		tokens.remove(logintoken);
 		removeTimerForTokens.remove(logintoken);
 		userRepository.save(user);
+		logger.info(String.format("User %s logged in", hsMail));
 		if (newUser) {
+			logger.info(String.format("New user %s created", hsMail));
 			return ResponseEntity.ok().body("New user created");
 		}
 
+		return ResponseEntity.ok().build();
+	}
+
+	// Skip auth
+	@GetMapping("/betaLogin")
+	public ResponseEntity<String> betaLogin(HttpServletResponse response,
+			@RequestParam(required = false, defaultValue = "1") String number) {
+
+		int num = Integer.parseInt(number);
+		if (num < 1 || num > 100) {
+			return ResponseEntity.badRequest().body("Invalid number");
+		}
+		String hsMail = "maximilia" + num + ".musterata" + num + "@student.hs-rm.de";
+
+		User user = userRepository.findByHsMail(hsMail).orElse(null);
+		if (user == null) {
+			user = new User(hsMail, null, UUID.randomUUID().toString(), false, "");
+		}
+		String accessToken = UUID.randomUUID().toString();
+		user.setAccessToken(accessToken);
+		Cookie cookie = new Cookie("sessionToken", user.getAccessToken());
+		cookie.setMaxAge(60 * 60 * 24 * 30);
+		cookie.setHttpOnly(true);
+		cookie.setPath("/");
+		response.setHeader("Set-Cookie", UserUtil.convertCookieToSetCookie(cookie));
+		userRepository.save(user);
+		logger.info(String.format("User %s logged in", hsMail));
 		return ResponseEntity.ok().build();
 	}
 
@@ -176,6 +209,7 @@ public class LoginManagment {
 		if (user == null) {
 			return ResponseEntity.badRequest().body("User not logged in");
 		}
+		logger.info(String.format("User %s updated private mail to %s", user.getHsMail(), privateMail));
 		user.setPrivateMail(privateMail);
 		userRepository.save(user);
 		return ResponseEntity.ok().build();

@@ -188,16 +188,16 @@ submitemail.addEventListener('click', function () {
                 if (response.ok) {
                     alert("Bitte prüfe dein Postfach");
                 } else {
-                    alert("Fehler beim Versenden der Email");
+                    alert("Fehler beim Versenden der E-Mail");
                 }
             });
 
         } else {
-            alert("Bitte geben Sie eine gültige Studenten-Email ein");
+            alert("Bitte geben Sie eine gültige Studenten-E-Mail ein");
             return;
         }
     } else {
-        alert("Bitte geben Sie eine gültige Studenten-Email ein");
+        alert("Bitte geben Sie eine gültige Studenten-E-Mail ein");
     }
 
 });
@@ -286,7 +286,7 @@ feedbackSend.addEventListener('click', function () {
         if (response.ok) {
             var instance = Modal.getOrCreateInstance(document.getElementById('feedbackModal'));
             instance.hide();
-            alert("Feedback erfolgreich gesendet. Hinweis: es kann etwas dauern bis das Feedback sichtbar wird.");
+            alert("Feedback erfolgreich gesendet. Hinweis: Es kann etwas dauern, bis das Feedback sichtbar wird.");
             location.reload();
 
         } else {
@@ -579,15 +579,18 @@ function showCalendar(items) {
             }
             currentstart = item.start;
 
-            itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title)}</strong><hr class="title-line"><div class="badge text-bg-secondary">${sanitizeHtml(item.subtext)}</div>`;
+
+            if (item.subtext.indexOf("OFFER") != -1) {
+                itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title)}</strong><hr class="title-line"><div class="badge text-bg-danger"  style="opacity:1!important;background-color::black!important;transform:brightness(0.8)">${sanitizeHtml(item.subtext)}</div>`;
+            } else {
+                itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title)}</strong><hr class="title-line"><div class="badge text-bg-secondary">${sanitizeHtml(item.subtext)}</div>`;
+            }
+
 
             itemEl.style.top = `${timeToPosition(item.start)}%`;
             itemEl.style.height = `${timeToPosition(item.end) - timeToPosition(item.start)}%`;
             itemEl.style.left = `${samestart * 25}px`;
-            if (lastclicked == offerId) {
-                itemEl.style.border = "5px solid #FB6D48";
 
-            }
 
             itemEl.addEventListener('mouseover', function () {
                 itemEl.style.zIndex = 2;  // hervorheben
@@ -604,8 +607,33 @@ function showCalendar(items) {
             } catch (error) {
 
             }
+            if (state == 1) {
+                itemEl.style.opacity = "0.3";
+            }
 
+
+            if (item.subtext.indexOf("ICH") != -1) {
+                itemEl.style.opacity = "0.6";
+                itemEl.style.cursor = "not-allowed";
+                itemEl.disabled = true;
+                itemEl.style.border = "3px solid green";
+            }
+            if (item.color == "rgba(227, 227, 227, 0.4)") {
+                itemEl.style.opacity = "0.9";
+            }
+
+            if (item.subtext.indexOf("OFFER") != -1) {
+                itemEl.style.opacity = "1";
+
+            }
+            if (lastclicked == offerId) {
+                itemEl.style.border = "5px solid #FB6D48";
+                itemEl.style.opacity = "1";
+            }
             itemEl.addEventListener('click', function () {
+                if (item.subtext.indexOf("ICH") != -1) {
+                    return;
+                }
 
                 if (localStorage.getItem('loggedIn') !== 'true') {
                     document.getElementById('loginModalTitle').innerText = "Anmeldung erforderlich";
@@ -720,7 +748,7 @@ function showCalendar(items) {
                 } else if (state == 1) {
 
 
-                    if (itemEl.style.border == "5px solid purple") {
+                    if (itemEl.style.border == "3px solid #0d5c10") {
                         itemEl.style.border = "";
                         gesucht.forEach((element, index) => {
                             if (element.day == currentDay && element.start == item.start && element.end == item.end) {
@@ -728,7 +756,7 @@ function showCalendar(items) {
                             }
                         });
                     } else {
-                        itemEl.style.border = "5px solid purple";
+                        itemEl.style.border = "3px solid #0d5c10";
 
                         gesucht.push({
                             title: offer.title,
@@ -924,9 +952,30 @@ mailUpdateBtn.addEventListener('click', function () {
         credentials: 'include'
     }).then(response => {
         if (response.ok) {
-            alert("Private Email erfolgreich gespeichert");
+            alert("Private E-Mail erfolgreich gespeichert");
         } else {
-            alert("Fehler beim Speichern der Email");
+            alert("Fehler beim Speichern der E-Mail");
+        }
+    });
+});
+var demoLogin = document.getElementById('demoLogin');
+var demoLoginInput = document.getElementById('demoLoginInput');
+demoLogin.addEventListener('click', function () {
+    var url = "";
+    if (isDev()) {
+        url = "http://" + window.location.hostname + ":8085/betaLogin?number=" + demoLoginInput.value;
+    } else {
+        url = "/betaLogin";
+    }
+    fetch(url, {
+        method: 'GET',
+        credentials: 'include'
+    }).then(response => {
+        if (response.ok) {
+            localStorage.setItem('loggedIn', "true");
+            window.location.href = "/";
+        } else {
+            alert("Fehler beim Einloggen");
         }
     });
 });

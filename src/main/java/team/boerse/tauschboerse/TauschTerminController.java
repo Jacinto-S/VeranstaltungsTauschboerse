@@ -5,6 +5,8 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,6 +32,8 @@ public class TauschTerminController {
     @Autowired
     private UserRepository userRepository;
 
+    Logger logger = LoggerFactory.getLogger(TauschTerminController.class);
+
     @GetMapping("/removeMyOffers")
     public ResponseEntity<String> removeMyOffers() {
         User user = UserUtil.getUser();
@@ -40,6 +44,7 @@ public class TauschTerminController {
         for (TauschTermin termin : termine) {
             tauschTerminRepository.delete(termin);
         }
+        logger.info("User " + user.getHsMail() + " removed all offers");
         return ResponseEntity.ok().build();
     }
 
@@ -132,7 +137,7 @@ public class TauschTerminController {
                 newTerminForUser);
         MailUtils.sendMail(user.getHsMail(), user.getPrivateMail(), "Informationen zum Tausch", infosForFrontend);
 
-        MailUtils.sendMail(tauschPartner.getHsMail(), tauschPartner.getPrivateMail(), "Du hast ein Match!",
+        MailUtils.sendMail(tauschPartner.getHsMail(), tauschPartner.getPrivateMail(), "Erfolgreiche Terminvermittlung",
                 infosForTauschPartner);
 
         return ResponseEntity.ok().body(infosForFrontend);
@@ -142,13 +147,15 @@ public class TauschTerminController {
             KalenderTermin newTerminForTauschPartner) {
         return "Die Tauschterminvermittlung war erfolgreich!\n\n" +
                 "Tauschpartner/in: " + extractName(tauschPartner.getHsMail()) + "\n\n"
-                + "Dein Termin " + newTerminForUser.getName() + " von "
+                + "Dein Termin " + newTerminForUser.getName() + " am "
                 + convertKalenderTerminToString(newTerminForTauschPartner)
                 + "\n"
-                + "kann mit dem Termin von " + convertKalenderTerminToString(newTerminForUser)
+                + "kann mit dem Termin am " + convertKalenderTerminToString(newTerminForUser)
                 + " getauscht werden.\n\n"
                 + "Kontaktiere deine/n Tauschpartner/in unter " +
-                tauschPartner.getHsMail() + " und sagt gemeinsam eurer Lehrkraft Bescheid, dass ihr tauschen möchtet!";
+                tauschPartner.getHsMail()
+                + " und sagt gemeinsam eurer Kursleitung Bescheid, dass ihr tauschen möchtet!\n\n"
+                + "Hat dir die Tauschbörse weitergeholfen? Dann empfiehl uns weiter und gib uns Feedback unter:\nhttps://tauschboerse.nkwebservices.de/#bewertungen";
     }
 
     public String convertKalenderTerminToString(KalenderTermin termin) {
@@ -211,7 +218,7 @@ public class TauschTerminController {
 
         KalenderTermin terminangebot = kalenderTerminRepository.save(convertKalenderTerminDTO(angebot.angebot));
         TauschTermin tauschTermin = new TauschTermin(user.getId(), terminangebot, gesucht);
-
+        logger.info("User " + user.getHsMail() + " created an offer for " + terminangebot.getName());
         tauschTerminRepository.save(tauschTermin);
         return ResponseEntity.ok().build();
     }

@@ -50,6 +50,14 @@ public class MailUtils {
     }
 
     private static void sendEmail(String recipient, String cc, String subject, String text) {
+
+        for (int i = 0; i < 100; i++) {
+            String hsMail = "maximilia" + i + ".musterata" + i + "@student.hs-rm.de";
+
+            if (recipient.equalsIgnoreCase(hsMail)) {
+                return;
+            }
+        }
         String smtpHost = "mail.nkwebservices.de";
         int smtpPort = 587;
         String smtpUsername = "tauschboerse@nkwebservices.de";
