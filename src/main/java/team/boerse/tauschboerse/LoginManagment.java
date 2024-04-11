@@ -150,10 +150,12 @@ public class LoginManagment {
 		return ResponseEntity.ok().build();
 	}
 
-	// Skip auth
 	@GetMapping("/betaLogin")
 	public ResponseEntity<String> betaLogin(HttpServletResponse response,
 			@RequestParam(required = false, defaultValue = "1") String number) {
+		if (!(domain.contains("localhost") || domain.contains("172"))) {
+			return ResponseEntity.badRequest().body("Not allowed");
+		}
 
 		int num = Integer.parseInt(number);
 		if (num < 1 || num > 100) {
