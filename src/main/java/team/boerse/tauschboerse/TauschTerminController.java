@@ -207,8 +207,8 @@ public class TauschTerminController {
                 count--;
             }
         }
-        if (count >= 2) {
-            return ResponseEntity.status(403).body("You can only have 2 offers at the same time");
+        if (count >= 5) {
+            return ResponseEntity.status(403).body("You can only have 5 offers at the same time");
         }
 
         List<KalenderTermin> gesucht = new ArrayList<>();

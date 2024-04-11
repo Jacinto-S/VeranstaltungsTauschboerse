@@ -33,13 +33,13 @@
                         <a class="nav-link active" href="#bewertungen">Bewertungen</a>
                     </li>
                     <li class="nav-item" id="loginshowbtn">
-                        <a class="nav-link active" data-bs-toggle="modal" data-bs-target="#loginModal"
-                            style="cursor: pointer;">Anmelden</a>
+                        <a class="nav-link active" style="cursor: pointer;" id="loginshowbtntext">Anmelden</a>
                     </li>
                     <script>
                         var loginshowbtn = document.getElementById('loginshowbtn');
+                        var loginshowbtntext = document.getElementById('loginshowbtntext');
                         if (localStorage.getItem('loggedIn') === 'true') {
-                            loginshowbtn.style.display = "none";
+                            loginshowbtntext.innerText = "Ausloggen";
                         }
                         function isDev() {
                             return window.location.href.includes("localhost") || window.location.href.includes("http://");
@@ -67,19 +67,20 @@
         <div class="week-calendar" id="weekCalendar">
             <!-- Platzhalter um Layoutshift zu verhindern -->
             <div class="time-scale">
-                <div style="top: 7.69231%;">8:00</div>
-                <div style="top: 15.3846%;">9:00</div>
-                <div style="top: 23.0769%;">10:00</div>
-                <div style="top: 30.7692%;">11:00</div>
-                <div style="top: 38.4615%;">12:00</div>
-                <div style="top: 46.1538%;">13:00</div>
-                <div style="top: 53.8462%;">14:00</div>
-                <div style="top: 61.5385%;">15:00</div>
-                <div style="top: 69.2308%;">16:00</div>
-                <div style="top: 76.9231%;">17:00</div>
-                <div style="top: 84.6154%;">18:00</div>
-                <div style="top: 92.3077%;">19:00</div>
-                <div style="top: 100%;visibility: hidden;">20:00</div>
+                <div style="top: 6.66667%;">8:00</div>
+                <div style="top: 13.3333%;">9:00</div>
+                <div style="top: 20%;">10:00</div>
+                <div style="top: 26.6667%;">11:00</div>
+                <div style="top: 33.3333%;">12:00</div>
+                <div style="top: 40%;">13:00</div>
+                <div style="top: 46.6667%;">14:00</div>
+                <div style="top: 53.3333%;">15:00</div>
+                <div style="top: 60%;">16:00</div>
+                <div style="top: 66.6667%;">17:00</div>
+                <div style="top: 73.3333%;">18:00</div>
+                <div style="top: 80%;">19:00</div>
+                <div style="top: 86.6667%;">20:00</div>
+                <div style="top: 93.3333%;">21:00</div>
             </div>
             <div class="day">
                 <div class="day-header">Mo</div>
@@ -102,10 +103,12 @@
                 <div class="day-header">Fr</div>
             </div>
         </div>
-
-        <br>
+        <p style="text-align: center;margin-top: 9px;margin-bottom: 6px;" id="stateInfo">
+            Du musst deinen Stundenplan hochladen, um Angebote erstellen zu können (siehe unten).
+        </p>
         <button class="btn btn-primary" id="confirmOffer" disabled>Angebot
             erstellen</button>
+
     </div>
     <div class="container">
         <br>
@@ -381,7 +384,7 @@
                 <h2 class="accordion-header" id="headingSix">
                     <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                         data-bs-target="#collapseSix" aria-expanded="false" aria-controls="collapseSix">
-                        Was ist, wenn ich keine Antwort erhalte?
+                        Was wenn sich mein Tauschpartner nicht meldet oder ablehnt?
                     </button>
                 </h2>
 

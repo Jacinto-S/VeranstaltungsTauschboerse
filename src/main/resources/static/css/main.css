@@ -148,8 +148,8 @@ body {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
-    min-height: 160px;
-    max-height: 160px;
+    min-height: 200px;
+    max-height: 200px;
     overflow-y: auto;
 }
 

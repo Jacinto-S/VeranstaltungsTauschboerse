@@ -41,3 +41,5 @@ maven-wrapper.properties
 mailpw.txt
 
 \src\main\resources\static\dist\*
+tauschkatalog.log*
+tauschkatalog.log

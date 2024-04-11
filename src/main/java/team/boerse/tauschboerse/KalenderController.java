@@ -40,17 +40,6 @@ public class KalenderController {
 
     Logger logger = LoggerFactory.getLogger(KalenderController.class);
 
-    @GetMapping(path = "/kalender", produces = "application/json")
-    public Iterable<KalenderTermin> list() {
-        List<KalenderTermin> kalender = new ArrayList<>();
-        kalenderTerminRepository.findAll().forEach(kalender::add);
-        if (kalender.isEmpty()) {
-            kalender.add(new KalenderTermin(new Date(), new Date(), "Test", "Test", "Test", KalenderTerminType.P));
-        }
-
-        return kalender;
-    }
-
     public static KalenderTerminType getKalenderType(String kalenderEintrag) {
         Matcher matcher = Pattern.compile("\\(([^)]+)\\)").matcher(kalenderEintrag);
         if (matcher.find()) {
@@ -96,6 +85,30 @@ public class KalenderController {
         kalenderRepository.save(kalender);
     }
 
+    @GetMapping(value = "/removeTermin")
+    public void removeTermin(@RequestParam long terminid) {
+        User user = UserUtil.getUser();
+        if (user == null) {
+            return;
+        }
+        Kalender kalender = kalenderRepository.findByUserId(user.getId());
+        if (kalender == null) {
+            return;
+        }
+        KalenderTermin termin = kalenderTerminRepository.findById(terminid).orElse(null);
+        if (termin == null || termin.getType() != KalenderTerminType.V) {
+            return;
+        }
+        if (kalender.getTermine().stream().noneMatch(t -> t.id == terminid)) {
+            return;
+        }
+
+        kalender.getTermine().remove(termin);
+        kalenderRepository.save(kalender);
+        kalenderTerminRepository.delete(termin);
+        logger.info(String.format("User %s removed a calendar entry", user.getHsMail()));
+    }
+
     @GetMapping(value = "/myKalender", produces = "application/json")
     public ResponseEntity<String> getKalender(@RequestParam(required = false) String terminid)
             throws JsonProcessingException {
@@ -127,8 +140,8 @@ public class KalenderController {
 
         // User wants to see possible offers for a specific termin
         if (terminid != null) {
-            String[] starts = { "08:15", "10:00", "11:45", "14:15", "16:00", "17:45" };
-            String[] ends = { "09:45", "11:30", "13:15", "15:45", "17:30", "19:15" };
+            String[] starts = { "08:15", "10:00", "11:45", "14:15", "16:00", "17:45", "19:30" };
+            String[] ends = { "09:45", "11:30", "13:15", "15:45", "17:30", "19:15", "21:00" };
             List<TauschTermin> termine = tauschTerminRepository.findAll();
             termine.sort((a, b) -> a.gesucht.size() - b.gesucht.size());
 
@@ -204,7 +217,7 @@ public class KalenderController {
                         String angebotend = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
                                 c.get(Calendar.MINUTE));
 
-                        KalenderTerminDTO terminDTO = new KalenderTerminDTO(ge.getName(), "ICH",
+                        KalenderTerminDTO terminDTO = new KalenderTerminDTO(ge.getName(), "ANGEFRAGT",
                                 ge.getType().getColorCode(), angebotstart, angebotend, ge.id);
                         c.setTime(ge.getStart());
                         int theday = c.get(Calendar.DAY_OF_WEEK) - 2;
@@ -216,7 +229,7 @@ public class KalenderController {
 
             for (int i = 0; i != 5; i++) {
                 List<KalenderTerminDTO> day = kalenderList.get(i);
-                for (int j = 0; j != 6; j++) {
+                for (int j = 0; j != 7; j++) {
                     boolean found = false;
                     for (KalenderTerminDTO termin : day) {
                         if (termin.start().equalsIgnoreCase(starts[j])) {

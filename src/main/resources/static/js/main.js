@@ -186,7 +186,7 @@ submitemail.addEventListener('click', function () {
                 credentials: 'include'
             }).then(response => {
                 if (response.ok) {
-                    alert("Bitte prüfe dein Postfach");
+                    alert("Bitte prüfe dein Postfach um die Anmeldung abzuschließen");
                 } else {
                     alert("Fehler beim Versenden der E-Mail");
                 }
@@ -299,30 +299,6 @@ import { Modal } from 'bootstrap';
 import * as ical from 'ical';
 
 var removeAllOvers = document.getElementById('removeAllOvers');
-var logoutbtn = document.getElementById('logoutbtn');
-
-logoutbtn.addEventListener('click', function () {
-    var url = "";
-    if (isDev()) {
-        url = "http://" + window.location.hostname + ":8085/logmeout";
-    } else {
-        url = "/logmeout";
-    }
-    fetch(url, {
-        method: 'GET',
-        credentials: 'include'
-    }).then(response => {
-        if (response.ok) {
-            localStorage.removeItem('loggedIn');
-
-            alert("Erfolgreich ausgeloggt");
-            window.location.reload();
-        } else {
-            alert("Fehler beim Ausloggen");
-        }
-    });
-});
-
 
 removeAllOvers.addEventListener('click', function () {
     var url = "";
@@ -397,7 +373,7 @@ document.getElementById("confirmOffer").addEventListener('click', function () {
         return;
     }
     if (gesucht.length == 0) {
-        alert("Bitte wählen Sie mindestens ein Gesuch aus");
+        alert("Bitte wähle mindestens ein Angebot aus");
         return;
     }
     var angebot = {
@@ -431,7 +407,7 @@ document.getElementById("confirmOffer").addEventListener('click', function () {
 
         } else {
             if (response.status == 403) {
-                alert("Du darfst höchstens 2 Angebote gleichzeitig haben!");
+                alert("Du darfst höchstens 5 Angebote gleichzeitig haben!");
             } else {
                 alert("Fehler beim Erstellen des Angebots.");
             }
@@ -447,8 +423,18 @@ function getMyCalendar() {
     } else {
         url = "/myKalender";
     }
+    var stateInfo = document.getElementById('stateInfo');
+    if (state == 0) {
+        stateInfo.style.visibility = "visible";
+        stateInfo.innerText = "Klicke einen Termin an, um ein Tauschangebot zu erstellen oder zu suchen.";
+    }
+
+
+
     if (state == 1) {
         url += "?title=" + (offer.title.split("(")[0].trim()) + "&terminid=" + offer.offerid;
+        stateInfo.style.visibility = "visible";
+        stateInfo.innerText = "Wähle die Termine aus, die du gerne hättest.";
     }
 
 
@@ -527,7 +513,7 @@ function showCalendar(items) {
     var dayNames = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
     const days = [{ 'Montag': [] }, { 'Dienstag': [] }, { 'Mittwoch': [] }, { 'Donnerstag': [] }, { 'Freitag': [] }];
     const startHour = 7;  // 8:00 Uhr
-    const endHour = 20;   // 21:00 Uhr
+    const endHour = 22;   // 21:00 Uhr
 
 
 
@@ -603,6 +589,44 @@ function showCalendar(items) {
                 var eventtype = item.title.match(/\(([^)]+)\)/)[1].split("-")[0];
                 if (eventtype == "V") {
                     itemEl.style.cursor = "not-allowed";
+                    var deletebtn = document.createElement('button');
+                    deletebtn.style.position = "absolute";
+                    deletebtn.style.right = "2px";
+                    deletebtn.innerText = "X";
+                    deletebtn.style.width = "18px";
+                    deletebtn.style.height = "18px";
+                    deletebtn.style.top = "2px";
+                    deletebtn.style.borderRadius = "25%";
+                    deletebtn.setAttribute('offerid', offerId);
+                    deletebtn.style.backgroundColor = "rgba(255, 0, 0, 0.6)";
+                    deletebtn.style.fontSize = "10px";
+                    deletebtn.title = "Termin löschen";
+                    deletebtn.style.border = "none";
+                    deletebtn.addEventListener('click', function () {
+                        var id = deletebtn.getAttribute('offerid');
+                        if (!confirm("Willst du den Termin wirklich löschen?")) {
+                            return;
+                        }
+                        var url = "";
+                        if (isDev()) {
+                            url = "http://" + window.location.hostname + ":8085/removeTermin?terminid=" + id;
+                        } else {
+                            url = "/removeTermin?terminid=" + id;
+                        }
+                        fetch(url, {
+                            method: 'GET',
+                            credentials: 'include'
+                        }).then(response => {
+                            if (response.ok) {
+                                alert("Termin erfolgreich gelöscht");
+                                getMyCalendar();
+                            } else {
+                                alert("Fehler beim Löschen des Termins");
+                            }
+                        });
+                    });
+
+                    itemEl.appendChild(deletebtn);
                 }
             } catch (error) {
 
@@ -612,7 +636,7 @@ function showCalendar(items) {
             }
 
 
-            if (item.subtext.indexOf("ICH") != -1) {
+            if (item.subtext.indexOf("ANGEFRAGT") != -1) {
                 itemEl.style.opacity = "0.6";
                 itemEl.style.cursor = "not-allowed";
                 itemEl.disabled = true;
@@ -631,7 +655,7 @@ function showCalendar(items) {
                 itemEl.style.opacity = "1";
             }
             itemEl.addEventListener('click', function () {
-                if (item.subtext.indexOf("ICH") != -1) {
+                if (item.subtext.indexOf("ANGEFRAGT") != -1) {
                     return;
                 }
 
@@ -649,12 +673,13 @@ function showCalendar(items) {
                 try {
                     var eventtype = item.title.match(/\(([^)]+)\)/)[1].split("-")[0];
                     if (eventtype == "V") {
+
                         return;
                     }
                 } catch (error) {
 
                 }
-                if (state == 1 && item.subtext.includes("OFFER") && item.subtext.indexOf("ICH") == -1) {
+                if (state == 1 && item.subtext.includes("OFFER") && item.subtext.indexOf("ANGEFRAGT") == -1) {
                     if (confirm("Willst du das Angebot annehmen?")) {
                         var url = "";
                         if (isDev()) {
@@ -732,7 +757,7 @@ function showCalendar(items) {
                 if (state == 0) {
                     state = 1;
                     lastclicked = offerId;
-                    itemEl.style.border = "5px solid pink";
+                    itemEl.style.border = "5px solid #FB6D48";
                     document.getElementById('confirmOffer').disabled = "true";
                     offer = {
                         offerid: offerId,
@@ -748,7 +773,7 @@ function showCalendar(items) {
                 } else if (state == 1) {
 
 
-                    if (itemEl.style.border == "3px solid #0d5c10") {
+                    if (itemEl.style.border == "3px solid rgb(13, 92, 16)") {
                         itemEl.style.border = "";
                         gesucht.forEach((element, index) => {
                             if (element.day == currentDay && element.start == item.start && element.end == item.end) {
@@ -756,7 +781,7 @@ function showCalendar(items) {
                             }
                         });
                     } else {
-                        itemEl.style.border = "3px solid #0d5c10";
+                        itemEl.style.border = "3px solid rgb(13, 92, 16)";
 
                         gesucht.push({
                             title: offer.title,
@@ -801,17 +826,17 @@ function manageVisibility() {
     if (loggedIn) {
         loggedIn = true;
         document.getElementById('fileupload').disabled = false;
-        document.getElementById('logoutbtn').style.display = "block";
         document.getElementById('MailBoxGroup').style.display = "none";
         document.getElementById('removeAllOvers').style.visibility = "visible";
-        document.getElementById('loginshowbtn').style.visibility = "hidden";
+        document.getElementById('loginshowbtntext').innerText = "Ausloggen";
         document.getElementById('feedbackbtn').style.display = "inline";
         document.getElementById('privateMailBox').style.display = "block";
     } else {
         document.getElementById('title').innerText = "Wochenkalender (Nicht eingeloggt)";
         document.getElementById('removeAllOvers').style.visibility = "hidden";
-        document.getElementById('logoutbtn').style.display = "none";
         document.getElementById('confirmOffer').style.visibility = "hidden";
+        document.getElementById('loginshowbtntext').innerText = "Anmelden";
+
         if (document.getElementById('uploadHint') != null) {
             document.getElementById('uploadHint').style.display = "block";
         }
@@ -962,10 +987,15 @@ var demoLogin = document.getElementById('demoLogin');
 var demoLoginInput = document.getElementById('demoLoginInput');
 demoLogin.addEventListener('click', function () {
     var url = "";
+    if (demoLoginInput.value == "" || demoLoginInput.value == null || demoLoginInput.value > 100 || demoLoginInput.value < 1) {
+        alert("Die Nummer muss zwischen 1 und 100 liegen");
+        return;
+    }
+
     if (isDev()) {
         url = "http://" + window.location.hostname + ":8085/betaLogin?number=" + demoLoginInput.value;
     } else {
-        url = "/betaLogin";
+        url = "/betaLogin?number=" + demoLoginInput.value;
     }
     fetch(url, {
         method: 'GET',
@@ -979,3 +1009,40 @@ demoLogin.addEventListener('click', function () {
         }
     });
 });
+
+var loginshowbtn = document.getElementById('loginshowbtn');
+loginshowbtn.addEventListener('click', function () {
+    if (localStorage.getItem('loggedIn') === 'true') {
+        var url = "";
+        if (isDev()) {
+            url = "http://" + window.location.hostname + ":8085/logmeout";
+        } else {
+            url = "/logmeout";
+        }
+        fetch(url, {
+            method: 'GET',
+            credentials: 'include'
+        }).then(response => {
+            if (response.ok) {
+                localStorage.removeItem('tempCalendar');
+                localStorage.removeItem('loggedIn');
+                localStorage.removeItem('whoami');
+                alert("Erfolgreich ausgeloggt");
+                window.location.reload();
+            } else {
+                alert("Fehler beim Ausloggen");
+            }
+        });
+    } else {
+        var instance = Modal.getOrCreateInstance(document.getElementById('loginModal'));
+        instance.show();
+        setTimeout(function () {
+            document.getElementById('email').focus();
+        }, 100);
+    }
+});
+
+var sharebtn = document.getElementById('sharebtn');
+if (!navigator.share) {
+    sharebtn.style.display = "none";
+}
