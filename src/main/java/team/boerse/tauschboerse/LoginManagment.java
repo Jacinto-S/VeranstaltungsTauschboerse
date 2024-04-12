@@ -38,8 +38,8 @@ public class LoginManagment {
 
 	Logger logger = LoggerFactory.getLogger(LoginManagment.class);
 
-	@Value("${amountOfRequest:5000000000}")
-	String amountOfRequest = "5000000000";
+	@Value("${amountOfRequest:2147483647}")
+	String amountOfRequest = "2147483647";
 
 	@Scheduled(fixedDelay = 60000)
 	public void removeExpiredTokens() {

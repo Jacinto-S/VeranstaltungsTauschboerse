@@ -67,20 +67,20 @@
         <div class="week-calendar" id="weekCalendar">
             <!-- Platzhalter um Layoutshift zu verhindern -->
             <div class="time-scale">
-                <div style="top: 6.66667%;">8:00</div>
-                <div style="top: 13.3333%;">9:00</div>
-                <div style="top: 20%;">10:00</div>
-                <div style="top: 26.6667%;">11:00</div>
-                <div style="top: 33.3333%;">12:00</div>
-                <div style="top: 40%;">13:00</div>
-                <div style="top: 46.6667%;">14:00</div>
-                <div style="top: 53.3333%;">15:00</div>
-                <div style="top: 60%;">16:00</div>
-                <div style="top: 66.6667%;">17:00</div>
-                <div style="top: 73.3333%;">18:00</div>
-                <div style="top: 80%;">19:00</div>
-                <div style="top: 86.6667%;">20:00</div>
-                <div style="top: 93.3333%;">21:00</div>
+                <div style="top: 3.84615%;">8:00</div>
+                <div style="top: 11.1305%;">9:00</div>
+                <div style="top: 18.4149%;">10:00</div>
+                <div style="top: 25.6993%;">11:00</div>
+                <div style="top: 32.9837%;">12:00</div>
+                <div style="top: 40.2681%;">13:00</div>
+                <div style="top: 47.5524%;">14:00</div>
+                <div style="top: 54.8368%;">15:00</div>
+                <div style="top: 62.1212%;">16:00</div>
+                <div style="top: 69.4056%;">17:00</div>
+                <div style="top: 76.69%;">18:00</div>
+                <div style="top: 83.9744%;">19:00</div>
+                <div style="top: 91.2587%;">20:00</div>
+                <div style="top: 98.5431%;">21:00</div>
             </div>
             <div class="day">
                 <div class="day-header">Mo</div>
@@ -103,10 +103,15 @@
                 <div class="day-header">Fr</div>
             </div>
         </div>
-        <p style="text-align: center;margin-top: 9px;margin-bottom: 6px;" id="stateInfo">
+        <p style="text-align: center;margin-top: 9px;margin-bottom: 6px;min-height: 48px;" id="stateInfo">
             Du musst deinen Stundenplan hochladen, um Angebote erstellen zu können (siehe unten).
         </p>
-        <button class="btn btn-primary" id="confirmOffer" disabled>Angebot
+        <script>
+            if (localStorage.getItem('loggedIn') === 'true') {
+                document.getElementById('stateInfo').innerText = "Klicke einen Termin an, um ein Tauschangebot zu erstellen oder zu suchen.";
+            }
+        </script>
+        <button class="btn btn-primary" style="" id="confirmOffer" disabled>Angebot
             erstellen</button>
 
     </div>
@@ -226,14 +231,8 @@
             </div>
         </div>
         </p>
-
-
-        <div class="btn-group" role="group" aria-label="Basic example">
-            <button class="btn btn-warning" id="logoutbtn" style="display: none;">Ausloggen</button>
-            <button class="btn btn-danger" id="removeAllOvers" style="visibility: hidden;">Alle Angebote
-                löschen</button>
-        </div>
-
+        <button class="btn btn-danger" id="removeAllOvers" style="visibility: hidden;">Alle Angebote
+            löschen</button>
         <br>
 
 

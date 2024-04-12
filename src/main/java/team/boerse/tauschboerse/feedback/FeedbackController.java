@@ -51,6 +51,9 @@ public class FeedbackController {
         if (user == null) {
             return ResponseEntity.status(401).body("You are not logged in");
         }
+        if (feedback.feedback().length() > 9999) {
+            return ResponseEntity.badRequest().body("Feedback is too long");
+        }
         Feedback newFeedback = new Feedback(user.getId(), feedback.isPublic(), feedback.feedback(), feedback.rating());
         feedbackRepository.save(newFeedback);
         return ResponseEntity.ok("Feedback created");

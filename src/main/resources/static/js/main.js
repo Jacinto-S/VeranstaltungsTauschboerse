@@ -235,7 +235,7 @@ function showFeedback() {
             rating.innerHTML = `<div class="card-header">${sanitizeHtml((element.creator)) + " am " + timestring}</div>
         <div class="card-body">
             <h5 class="card-title"><span style='font-size:small'>${stars}</span></h5>
-            <p class="card-text">${sanitizeHtml(element.feedback)}</p>
+            <p class="card-text" style="max-height:95px;overflow:auto">${sanitizeHtml(element.feedback)}</p>
         </div>`;
             ratings.appendChild(rating);
 
@@ -512,8 +512,8 @@ var lastclicked = -1;
 function showCalendar(items) {
     var dayNames = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
     const days = [{ 'Montag': [] }, { 'Dienstag': [] }, { 'Mittwoch': [] }, { 'Donnerstag': [] }, { 'Freitag': [] }];
-    const startHour = 7;  // 8:00 Uhr
-    const endHour = 22;   // 21:00 Uhr
+    const startHour = 8;  // 8:00 Uhr
+    const endHour = 21.2;   // 21:00 Uhr
 
 
 
@@ -522,7 +522,12 @@ function showCalendar(items) {
     function timeToPosition(time) {
         const [hours, minutes] = time.split(':').map(Number);
         const totalHours = (hours - startHour) + (minutes / 60);
-        return (totalHours / (endHour - startHour)) * 100;
+        // add percentage to hide header
+        // day height is 100% - 25px (header height)
+        var dayHeight = 650;
+        var percent = 25 * 100 / dayHeight;
+        var perc = ((1 - (totalHours / (endHour - startHour)) * 1) * percent);
+        return ((totalHours / (endHour - startHour)) * 100) + perc;
     }
 
     // Zeitskala hinzufügen
@@ -530,11 +535,10 @@ function showCalendar(items) {
     timeScaleEl.classList.add('time-scale');
     for (let hour = startHour; hour <= endHour; hour++) {
         for (let minute = 0; minute < 60; minute += 60) {
-            if (hour == endHour) continue;
-            if (hour === startHour && minute === 0) continue;
             const timeDiv = document.createElement('div');
-            timeDiv.textContent = `${hour}:${String(minute).padStart(2, '0')}`;
+            timeDiv.textContent = `${Math.floor(hour)}:${String(0).padStart(2, '0')}`;
             timeDiv.style.top = `${timeToPosition(`${hour}:${minute}`)}%`;
+            if (hour == endHour) continue;
             timeScaleEl.appendChild(timeDiv);
         }
     }
@@ -589,44 +593,46 @@ function showCalendar(items) {
                 var eventtype = item.title.match(/\(([^)]+)\)/)[1].split("-")[0];
                 if (eventtype == "V") {
                     itemEl.style.cursor = "not-allowed";
-                    var deletebtn = document.createElement('button');
-                    deletebtn.style.position = "absolute";
-                    deletebtn.style.right = "2px";
-                    deletebtn.innerText = "X";
-                    deletebtn.style.width = "18px";
-                    deletebtn.style.height = "18px";
-                    deletebtn.style.top = "2px";
-                    deletebtn.style.borderRadius = "25%";
-                    deletebtn.setAttribute('offerid', offerId);
-                    deletebtn.style.backgroundColor = "rgba(255, 0, 0, 0.6)";
-                    deletebtn.style.fontSize = "10px";
-                    deletebtn.title = "Termin löschen";
-                    deletebtn.style.border = "none";
-                    deletebtn.addEventListener('click', function () {
-                        var id = deletebtn.getAttribute('offerid');
-                        if (!confirm("Willst du den Termin wirklich löschen?")) {
-                            return;
-                        }
-                        var url = "";
-                        if (isDev()) {
-                            url = "http://" + window.location.hostname + ":8085/removeTermin?terminid=" + id;
-                        } else {
-                            url = "/removeTermin?terminid=" + id;
-                        }
-                        fetch(url, {
-                            method: 'GET',
-                            credentials: 'include'
-                        }).then(response => {
-                            if (response.ok) {
-                                alert("Termin erfolgreich gelöscht");
-                                getMyCalendar();
-                            } else {
-                                alert("Fehler beim Löschen des Termins");
+                    if (loggedIn) {
+                        var deletebtn = document.createElement('button');
+                        deletebtn.style.position = "absolute";
+                        deletebtn.style.right = "2px";
+                        deletebtn.innerText = "X";
+                        deletebtn.style.width = "18px";
+                        deletebtn.style.height = "18px";
+                        deletebtn.style.top = "2px";
+                        deletebtn.style.borderRadius = "25%";
+                        deletebtn.setAttribute('offerid', offerId);
+                        deletebtn.style.backgroundColor = "rgba(255, 0, 0, 0.6)";
+                        deletebtn.style.fontSize = "10px";
+                        deletebtn.title = "Termin löschen";
+                        deletebtn.style.border = "none";
+                        deletebtn.addEventListener('click', function () {
+                            var id = deletebtn.getAttribute('offerid');
+                            if (!confirm("Willst du den Termin wirklich löschen?")) {
+                                return;
                             }
+                            var url = "";
+                            if (isDev()) {
+                                url = "http://" + window.location.hostname + ":8085/removeTermin?terminid=" + id;
+                            } else {
+                                url = "/removeTermin?terminid=" + id;
+                            }
+                            fetch(url, {
+                                method: 'GET',
+                                credentials: 'include'
+                            }).then(response => {
+                                if (response.ok) {
+                                    alert("Termin erfolgreich gelöscht");
+                                    getMyCalendar();
+                                } else {
+                                    alert("Fehler beim Löschen des Termins");
+                                }
+                            });
                         });
-                    });
 
-                    itemEl.appendChild(deletebtn);
+                        itemEl.appendChild(deletebtn);
+                    }
                 }
             } catch (error) {
 
@@ -639,6 +645,7 @@ function showCalendar(items) {
             if (item.subtext.indexOf("ANGEFRAGT") != -1) {
                 itemEl.style.opacity = "0.6";
                 itemEl.style.cursor = "not-allowed";
+                itemEl.style.fontSize = "10px";
                 itemEl.disabled = true;
                 itemEl.style.border = "3px solid green";
             }
@@ -648,7 +655,7 @@ function showCalendar(items) {
 
             if (item.subtext.indexOf("OFFER") != -1) {
                 itemEl.style.opacity = "1";
-
+                itemEl.style.fontSize = "10px";
             }
             if (lastclicked == offerId) {
                 itemEl.style.border = "5px solid #FB6D48";
