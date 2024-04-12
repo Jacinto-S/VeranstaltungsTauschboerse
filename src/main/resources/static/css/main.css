@@ -9,7 +9,7 @@
 }
 
 .time-scale {
-    height: 600px;
+    height: 650px;
     position: relative;
 }
 
@@ -72,7 +72,7 @@
 .day {
     position: relative;
     padding-top: 25px;
-    height: 600px;
+    height: 650px;
     border-right: 1px solid #ccc;
     border-bottom: 1px solid #ccc;
     border-top: 1px solid #ccc;
@@ -148,8 +148,8 @@ body {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
-    min-height: 200px;
-    max-height: 200px;
+    min-height: 160px;
+    max-height: 240px;
     overflow-y: auto;
 }
 
