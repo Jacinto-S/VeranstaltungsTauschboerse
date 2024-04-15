@@ -55,7 +55,7 @@ public class KalenderController {
     }
 
     @PostMapping("/uploadKalender")
-    public void uploadICSFile(@RequestBody(required = false) String icsFile)
+    public void uploadICSFile(@RequestBody String icsFile)
             throws IOException, ParserException, ParseException {
         User user = UserUtil.getUser();
         if (user == null) {
@@ -168,7 +168,7 @@ public class KalenderController {
                             && usersTermin.getName().indexOf(title) == -1) {
                         continue;
                     }
-                    for (KalenderTermin ge : termin.gesucht) {
+                    for (KalenderTermin ge : termin.getGesucht()) {
                         c.setTime(ge.getStart());
                         String start = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
                                 c.get(Calendar.MINUTE));

@@ -22,7 +22,7 @@ public class TauschTermin {
     long id;
 
     long userid;
-    @OneToOne(cascade = CascadeType.ALL)
+    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     KalenderTermin angebot;
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     List<KalenderTermin> gesucht;

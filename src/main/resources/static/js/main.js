@@ -901,7 +901,7 @@ if (isDev()) {
 
 if (localStorage.getItem('tempCalendar') != null && localStorage.getItem('loggedIn') !== 'true') {
     showIcalCalendar(ical.parseICS(localStorage.getItem('tempCalendar')));
-} else if (localStorage.getItem('uploadLocalCalendar') === 'true') {
+} else if (localStorage.getItem('uploadLocalCalendar') === 'true' && localStorage.getItem('tempCalendar') != null) {
     fetch(url, {
         method: 'POST',
         headers: {
