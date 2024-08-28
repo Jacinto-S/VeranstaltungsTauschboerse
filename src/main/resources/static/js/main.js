@@ -1,4 +1,5 @@
 import sanitizeHtml from 'sanitize-html';
+import 'altcha';
 
 
 function isDev() {
@@ -10,6 +11,8 @@ function isDev() {
 var aorurl = document.getElementById('aorurl');
 var aorurl2 = document.getElementById('aorurl2');
 var aorurl3 = document.getElementById('aorurl3');
+var powverified = false;
+var powpayload = "";
 
 // select text of aorurl
 function copy(event) {
@@ -20,7 +23,7 @@ function copy(event) {
     window.getSelection().addRange(range);
     document.execCommand('copy');
     window.getSelection().removeAllRanges();
-    alert("Link wurde in die Zwischenablage kopiert");
+    showMessage("Link kopiert", "Link wurde in die Zwischenablage kopiert");
 };
 aorurl.addEventListener('click', copy);
 aorurl2.addEventListener('click', copy);
@@ -85,7 +88,7 @@ myKalendar.addEventListener('drop', function (event) {
 // Share Features
 function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(function () {
-        alert('Link wurde in die Zwischenablage kopiert');
+        showMessage("Link kopiert", "Link wurde in die Zwischenablage kopiert");
     }, function (err) {
         alert('Fehler beim Kopieren des Links');
     });
@@ -143,7 +146,6 @@ if (logintoken != null) {
                 } else {
                     localStorage.setItem('loggedIn', "true");
                     localStorage.removeItem('tempCalendar');
-                    alert("Erfolgreich eingeloggt");
                     window.location.href = "/";
 
                 }
@@ -152,6 +154,9 @@ if (logintoken != null) {
 
         } else {
             window.history.replaceState({}, document.title, "/");
+            setTimeout(() => {
+                showMessage("Anmeldung fehlgeschlagen", "Der Anmeldungslink ist abgelaufen. Bitte versuche es erneut");
+            }, 1000);
         }
     });
 } else {
@@ -162,45 +167,101 @@ if (logintoken != null) {
 
 
 
+var countRequests = 0;
+
+submitemail.addEventListener('mousedown', function (e) {
+    e.preventDefault();
 
 
-submitemail.addEventListener('click', function () {
 
     if (email.value.includes("@student.hs-rm.de")) {
-        var firstpart = email.value.split("@")[0];
-        if (firstpart.includes(".")) {
-            var url = "";
-            if (isDev()) {
-                url = "http://" + window.location.hostname + ":8085/requestLogin";
-            } else {
-                url = "/requestLogin";
-            }
-            url = url + "?hsMail=" + email.value;
+        requestLoginMail();
+    } else {
+        showMessage("Ungültige Addresse", "Bitte geben Sie eine gültige Studenten-E-Mail ein");
+    }
+    e.preventDefault();
+    return false;
+});
+submitemail.addEventListener('click', function (e) {
+    e.preventDefault();
+    submitemail.dispatchEvent(new MouseEvent('mousedown'));
+});
+
+
+
+function requestLoginMail(notifyUser = true, toemail = email.value) {
+
+    var textfrom = submitemail.innerText;
+
+
+    var firstpart = email.value.split("@")[0];
+    if (!powverified) {
+        alert("Bitte bestätigen Sie, dass Sie kein Roboter sind");
+        return;
+    }
+
+    if (firstpart.includes(".")) {
+        var url = "";
+        if (isDev()) {
+            url = "http://" + window.location.hostname + ":8085/requestLogin";
+        } else {
+            url = "/requestLogin";
+        }
+
+        url = url + "?hsMail=" + toemail + "&pow=" + encodeURIComponent(powpayload);
+        if (notifyUser) {
+            submitemail.innerHTML = "<span class='spinner-border spinner-border-sm' role='status' aria-hidden='true'></span>";
             submitemail.disabled = true;
             setTimeout(function () {
                 submitemail.disabled = false;
             }, 30000);
-
-            fetch(url, {
-                method: 'GET',
-                credentials: 'include'
-            }).then(response => {
-                if (response.ok) {
-                    alert("Bitte prüfe dein Postfach um die Anmeldung abzuschließen");
-                } else {
-                    alert("Fehler beim Versenden der E-Mail");
-                }
-            });
-
-        } else {
-            alert("Bitte geben Sie eine gültige Studenten-E-Mail ein");
-            return;
         }
+
     } else {
         alert("Bitte geben Sie eine gültige Studenten-E-Mail ein");
+        return;
     }
 
-});
+    fetch(url, {
+        method: 'GET',
+        credentials: 'include'
+    }).then(async response => {
+        if (response.ok) {
+            powpayload = "";
+            powverified = false;
+            if (notifyUser) {
+                setTimeout(function () {
+                    showMessage("Anmeldelink erfolgreich angefordert", "Bitte bestätige deine Anmeldung mit dem Link in der E-Mail. <a href='https://webmail.hs-rm.de/owa/#path=/mail/inbox'>HSRM E-Mail Client öffnen</a>");
+                    submitemail.innerText = textfrom;
+                }, 2500);
+            }
+
+        } else {
+            if (response.status == 400) {
+                var text = await response.text();
+                if (text.indexOf("Invalid captcha") != -1) {
+                    alert("Captcha-Eingabe wurde abgelehnt. Bitte versuche es erneut");
+                    window.location.reload();
+
+                    return;
+                }
+            }
+
+            if (countRequests >= 2) {
+                submitemail.disabled = false;
+                submitemail.innerText = "Absenden";
+                if (notifyUser) {
+                    alert("Es ist ein Fehler aufgetreten. Bitte versuche es später erneut");
+                }
+                return;
+            } else {
+                countRequests++;
+                setTimeout(requestLoginMail(notifyUser, toemail), 500);
+            }
+        }
+    });
+}
+
 
 // Feedback
 function showFeedback() {
@@ -286,16 +347,15 @@ feedbackSend.addEventListener('click', function () {
         if (response.ok) {
             var instance = Modal.getOrCreateInstance(document.getElementById('feedbackModal'));
             instance.hide();
-            alert("Feedback erfolgreich gesendet. Hinweis: Es kann etwas dauern, bis das Feedback sichtbar wird.");
-            location.reload();
-
+            showMessage("Feedback erfolgreich gesendet", "Bitte beachte, dass es einige Minuten dauern kann, bis das Feedback sichtbar wird.");
+            showFeedback();
         } else {
             alert("Fehler beim Senden des Feedbacks");
         }
     });
 });
 
-import { Modal } from 'bootstrap';
+import { Modal, Toast } from 'bootstrap';
 import * as ical from 'ical';
 
 var removeAllOvers = document.getElementById('removeAllOvers');
@@ -312,13 +372,35 @@ removeAllOvers.addEventListener('click', function () {
         credentials: 'include'
     }).then(response => {
         if (response.ok) {
-            alert("Alle Angebote erfolgreich gelöscht");
             getMyCalendar();
+            window.scrollTo(0, 0);
+            gesucht = [];
+
+            showMessage("Angebote gelöscht", "Alle Angebote wurden gelöscht.");
         } else {
             alert("Fehler beim Löschen der Angebote");
         }
     });
 });
+const toastElList = document.querySelectorAll('.toast')
+const toastList = [];
+
+toastList.push(new Toast(document.getElementById('MessageToast'), {}));
+
+function showMessage(title, message) {
+    var modalElement = document.getElementById('MessageToast');
+    var modalInstance = toastList[0];
+    var modalTitle = document.getElementById('MessageTitle');
+    var modalBody = document.getElementById('MessageBody');
+
+    modalTitle.textContent = title || 'Nachricht'
+    modalBody.innerHTML = sanitizeHtml(message) || 'Nachricht'
+
+    modalInstance.show();
+}
+
+
+
 
 function showUploadedCalendar() {
 
@@ -416,6 +498,16 @@ document.getElementById("confirmOffer").addEventListener('click', function () {
     });
 });
 
+
+function debounce(func, wait) {
+    let timeout;
+    return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
+
 function getMyCalendar() {
     var url = "";
     if (isDev()) {
@@ -423,10 +515,11 @@ function getMyCalendar() {
     } else {
         url = "/myKalender";
     }
+
     var stateInfo = document.getElementById('stateInfo');
     if (state == 0) {
         stateInfo.style.visibility = "visible";
-        stateInfo.innerText = "Klicke einen Termin an, um ein Tauschangebot zu erstellen oder zu suchen.";
+        stateInfo.innerText = "Wähle einen Termin, um ein Tauschangebot zu Erstellen oder wähle ein Angebot aus.";
     }
 
 
@@ -447,6 +540,7 @@ function getMyCalendar() {
 }
 if (localStorage.getItem('loggedIn') === 'true') {
     getMyCalendar();
+
 }
 
 
@@ -476,7 +570,7 @@ function showIcalCalendar(parsed) {
                     subtext: '',
                     color: 'lightgreen',
                     start: parsedStartDate,
-                    end: parsedEndDate
+                    end: parsedEndDate,
                 };
                 switch (eventtype) {
                     case "V":
@@ -555,6 +649,9 @@ function showCalendar(items) {
         var samestart = 0;
         var currentstart = 0;
         const currentDay = (count);
+        items[count].sort((a, b) => {
+            return a.start.localeCompare(b.start);
+        });
 
         (items[count] || []).forEach((item, index) => {
             const offerId = item.offerid;
@@ -568,30 +665,49 @@ function showCalendar(items) {
                 samestart = 0;
             }
             currentstart = item.start;
-
+            console.log(currentstart);
 
             if (item.subtext.indexOf("OFFER") != -1) {
                 itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title)}</strong><hr class="title-line"><div class="badge text-bg-danger"  style="opacity:1!important;background-color::black!important;transform:brightness(0.8)">${sanitizeHtml(item.subtext)}</div>`;
+
+            } else if (item.subtext == "" && (item.title.indexOf("(P-") != -1 || item.title.indexOf("(Ü-") != -1 || item.title.indexOf("(S-") != -1) && item.title.match(/\(([^)]+)\)/)[1].split("-")[1] != undefined) {
+                try {
+                    var praktikumtype = item.title.match(/\(([^)]+)\)/)[1].split("-")[1];
+                    itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title.split(" ")[0])}</strong><hr class="title-line"><p style="text-align: center;font-size: 28px;opacity: 0.7;color:#808080">${praktikumtype}</p>`;
+                } catch (error) {
+                    itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title)}</strong><hr class="title-line"><div class="badge text-bg-secondary smallbadge">${sanitizeHtml(item.subtext)}</div>`;
+                }
+
+
+
             } else {
-                itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title)}</strong><hr class="title-line"><div class="badge text-bg-secondary">${sanitizeHtml(item.subtext)}</div>`;
+                itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title.split(" ")[0])}</strong><hr class="title-line"><div class="badge text-bg-secondary smallbadge">${sanitizeHtml(item.subtext)}</div>`;
             }
 
 
             itemEl.style.top = `${timeToPosition(item.start)}%`;
             itemEl.style.height = `${timeToPosition(item.end) - timeToPosition(item.start)}%`;
-            itemEl.style.left = `${samestart * 25}px`;
+            itemEl.style.marginLeft = `${samestart * 15}px`;
 
 
-            itemEl.addEventListener('mouseover', function () {
-                itemEl.style.zIndex = 2;  // hervorheben
+            var opa = itemEl.style.opacity + "";
+            itemEl.addEventListener("mouseenter", function () {
+                itemEl.style.zIndex = 100;
+                itemEl.classList.add("foreground");
             });
-            itemEl.addEventListener('mouseout', function () {
-                itemEl.style.zIndex = 1;  // zurücksetzen
+            itemEl.addEventListener("mouseleave", function () {
+                itemEl.style.zIndex = 1;
+                itemEl.classList.remove("foreground");
+
             });
+
+
+
+
 
             try {
                 var eventtype = item.title.match(/\(([^)]+)\)/)[1].split("-")[0];
-                if (eventtype == "V") {
+                if (eventtype == "V" || item.subtext.indexOf("ANGEFRAGT") != -1) {
                     itemEl.style.cursor = "not-allowed";
                     if (loggedIn) {
                         var deletebtn = document.createElement('button');
@@ -603,12 +719,14 @@ function showCalendar(items) {
                         deletebtn.style.top = "2px";
                         deletebtn.style.borderRadius = "25%";
                         deletebtn.setAttribute('offerid', offerId);
-                        deletebtn.style.backgroundColor = "rgba(255, 0, 0, 0.6)";
+                        deletebtn.style.backgroundColor = "rgb(255, 0, 0)";
                         deletebtn.style.fontSize = "10px";
                         deletebtn.title = "Termin löschen";
                         deletebtn.style.border = "none";
+
                         deletebtn.addEventListener('click', function () {
                             var id = deletebtn.getAttribute('offerid');
+
                             if (!confirm("Willst du den Termin wirklich löschen?")) {
                                 return;
                             }
@@ -623,8 +741,8 @@ function showCalendar(items) {
                                 credentials: 'include'
                             }).then(response => {
                                 if (response.ok) {
-                                    alert("Termin erfolgreich gelöscht");
                                     getMyCalendar();
+                                    showMessage("Termin gelöscht", "Der Termin wurde erfolgreich gelöscht.", "success");
                                 } else {
                                     alert("Fehler beim Löschen des Termins");
                                 }
@@ -643,25 +761,31 @@ function showCalendar(items) {
 
 
             if (item.subtext.indexOf("ANGEFRAGT") != -1) {
-                itemEl.style.opacity = "0.6";
+                if (samestart == 0) {
+                    itemEl.style.opacity = "0.6";
+                } else {
+                    itemEl.style.opacity = "";
+                }
+
+
                 itemEl.style.cursor = "not-allowed";
                 itemEl.style.fontSize = "10px";
                 itemEl.disabled = true;
-                itemEl.style.border = "3px solid green";
+                //
+
             }
             if (item.color == "rgba(227, 227, 227, 0.4)") {
                 itemEl.style.opacity = "0.9";
             }
 
             if (item.subtext.indexOf("OFFER") != -1) {
-                itemEl.style.opacity = "1";
                 itemEl.style.fontSize = "10px";
             }
-            if (lastclicked == offerId) {
-                itemEl.style.border = "5px solid #FB6D48";
+            if (lastclicked == offerId && lastclicked != -1) {
+                itemEl.style.outline = "3px solid #FB6D48";
                 itemEl.style.opacity = "1";
             }
-            itemEl.addEventListener('click', function () {
+            itemEl.addEventListener('mousedown', function () {
                 if (item.subtext.indexOf("ANGEFRAGT") != -1) {
                     return;
                 }
@@ -683,10 +807,12 @@ function showCalendar(items) {
 
                         return;
                     }
+
+
                 } catch (error) {
 
                 }
-                if (state == 1 && item.subtext.includes("OFFER") && item.subtext.indexOf("ANGEFRAGT") == -1) {
+                if (item.subtext.includes("OFFER") && item.subtext.indexOf("ANGEFRAGT") == -1) {
                     if (confirm("Willst du das Angebot annehmen?")) {
                         var url = "";
                         if (isDev()) {
@@ -731,17 +857,18 @@ function showCalendar(items) {
                     }
                     return;
                 } else if (state == 1 && item.title.indexOf("(") != -1) {
-
                     if (lastclicked == offerId) {
                         state = 0;
                         lastclicked = -1;
-                        itemEl.style.border = "1px solid black";
+                        itemEl.style.outline = "";
                         document.getElementById('confirmOffer').disabled = true;
                         gesucht = [];
                         offer = null;
                         getMyCalendar();
                         return;
                     }
+
+
 
                     state = 1;
                     gesucht = [];
@@ -756,7 +883,7 @@ function showCalendar(items) {
                     };
                     lastclicked = offerId;
 
-
+                    itemEl.style.outline = "3px solid #FB6D48";
                     getMyCalendar();
                     return;
                 }
@@ -764,7 +891,7 @@ function showCalendar(items) {
                 if (state == 0) {
                     state = 1;
                     lastclicked = offerId;
-                    itemEl.style.border = "5px solid #FB6D48";
+                    itemEl.style.outline = "3px solid #FB6D48";
                     document.getElementById('confirmOffer').disabled = "true";
                     offer = {
                         offerid: offerId,
@@ -800,6 +927,7 @@ function showCalendar(items) {
                         });
                     }
                     console.log(gesucht);
+
                     if (gesucht.length > 0) {
                         document.getElementById('confirmOffer').disabled = false;
                     } else {
@@ -833,11 +961,12 @@ function manageVisibility() {
     if (loggedIn) {
         loggedIn = true;
         document.getElementById('fileupload').disabled = false;
-        document.getElementById('MailBoxGroup').style.display = "none";
         document.getElementById('removeAllOvers').style.visibility = "visible";
         document.getElementById('loginshowbtntext').innerText = "Ausloggen";
         document.getElementById('feedbackbtn').style.display = "inline";
         document.getElementById('privateMailBox').style.display = "block";
+        document.getElementById('confirmOffer').style.visibility = "";
+
     } else {
         document.getElementById('title').innerText = "Wochenkalender (Nicht eingeloggt)";
         document.getElementById('removeAllOvers').style.visibility = "hidden";
@@ -955,36 +1084,57 @@ window.addEventListener('resize', function () {
 resizeDayHeaders();
 
 // Private Mail Update
-var mailUpdate = document.getElementById('private-mail'); var mailUpdateBtn = document.getElementById('save-private-mail');
+var mailUpdate = document.getElementById('private-mail');
+var mailUpdateBtn = document.getElementById('save-private-mail');
 mailUpdate.addEventListener('input', function () {
     // is the input valid?
     var mail = mailUpdate.value;
-    if (mail.includes("@")) {
-        mailUpdateBtn.disabled = false;
+
+    if (mail.length >= 1) {
+        mailUpdateBtn.innerText = "Speichern";
+    } else {
+        mailUpdateBtn.innerText = "Löschen";
+    }
+
+    if (mail.indexOf("@") > -1) {
+        mailUpdateBtn.removeAttribute("disabled");
     } else {
         mailUpdateBtn.disabled = true;
     }
-    if (mail.includes("student.hs-rm.de")) {
-        mailUpdateBtn.disabled = true;
-    }
+
+});
+mailUpdate.addEventListener("change", function () {
+    mailUpdate.dispatchEvent(new MouseEvent('input'));
 });
 
 // updatePrivateMail Endpoint. Get, Parameter is privateMail
 mailUpdateBtn.addEventListener('click', function () {
     var mail = mailUpdate.value;
+    if (mail.includes("student.hs-rm.de")) {
+        showMessage("E-Mail nicht aktualisiert", "Du darfst keine Hochschul-E-Mail verwenden");
+        mailUpdateBtn.innerText = "Löschen";
+        mailUpdate.value = "";
+        return;
+    }
     var url = "";
     if (isDev()) {
         url = "http://" + window.location.hostname + ":8085/updatePrivateMail";
     } else {
         url = "/updatePrivateMail";
     }
-    url = url + "?privateMail=" + mail;
+    if (mail.length >= 1) {
+        url = url + "?privateMail=" + mail;
+    }
+
     fetch(url, {
         method: 'GET',
         credentials: 'include'
     }).then(response => {
         if (response.ok) {
-            alert("Private E-Mail erfolgreich gespeichert");
+            showMessage("E-Mail aktualisiert", "Deine private E-Mail wurde aktualisiert");
+            mailUpdate.value = "";
+            mailUpdateBtn.innerText = "Löschen";
+
         } else {
             alert("Fehler beim Speichern der E-Mail");
         }
@@ -992,6 +1142,12 @@ mailUpdateBtn.addEventListener('click', function () {
 });
 var demoLogin = document.getElementById('demoLogin');
 var demoLoginInput = document.getElementById('demoLoginInput');
+var betaLoginBox = document.getElementById('betaLoginBox');
+if (isDev()) {
+    demoLogin.style.display = "block";
+    demoLoginInput.style.display = "block";
+    betaLoginBox.style.display = "block";
+}
 demoLogin.addEventListener('click', function () {
     var url = "";
     if (demoLoginInput.value == "" || demoLoginInput.value == null || demoLoginInput.value > 100 || demoLoginInput.value < 1) {
@@ -1018,38 +1174,99 @@ demoLogin.addEventListener('click', function () {
 });
 
 var loginshowbtn = document.getElementById('loginshowbtn');
-loginshowbtn.addEventListener('click', function () {
+var clearSessions = document.getElementById('clearSessions');
+loginshowbtn.addEventListener('mousedown', function () {
     if (localStorage.getItem('loggedIn') === 'true') {
-        var url = "";
-        if (isDev()) {
-            url = "http://" + window.location.hostname + ":8085/logmeout";
-        } else {
-            url = "/logmeout";
-        }
-        fetch(url, {
-            method: 'GET',
-            credentials: 'include'
-        }).then(response => {
-            if (response.ok) {
-                localStorage.removeItem('tempCalendar');
-                localStorage.removeItem('loggedIn');
-                localStorage.removeItem('whoami');
-                alert("Erfolgreich ausgeloggt");
-                window.location.reload();
-            } else {
-                alert("Fehler beim Ausloggen");
-            }
-        });
+        logout();
     } else {
         var instance = Modal.getOrCreateInstance(document.getElementById('loginModal'));
         instance.show();
         setTimeout(function () {
             document.getElementById('email').focus();
-        }, 100);
+        }, 125);
     }
 });
+clearSessions.addEventListener('click', function () {
+    if (localStorage.getItem('loggedIn') === 'true') {
+        logout(true);
+        e.preventDefault();
+    } else {
+        alert("Du bist nicht eingeloggt");
+    }
+});
+
+function logout(all = false) {
+    var url = "";
+    if (isDev()) {
+        url = "http://" + window.location.hostname + ":8085/logmeout";
+    } else {
+        url = "/logmeout";
+    }
+    if (all) {
+        url += "?all=true";
+    }
+    loginshowbtn.disabled = true;
+
+    fetch(url, {
+        method: 'GET',
+        credentials: 'include'
+    }).then(response => {
+        if (response.ok) {
+            if (all) {
+                alert("Alle anderen Sitzungen wurden erfolgreich beendet");
+            } else {
+                localStorage.removeItem('tempCalendar');
+                localStorage.removeItem('loggedIn');
+                localStorage.removeItem('whoami');
+                showMessage("Erfolgreich ausgeloggt", "Du wurdest erfolgreich ausgeloggt");
+                setTimeout(function () {
+                    window.location.href = "/";
+                }, 2500);
+            }
+
+        } else {
+            loginshowbtn.removeAttribute("disabled");
+            showMessage("Fehler beim Ausloggen", "Fehler beim Ausloggen. Bitte versuche es erneut");
+        }
+    });
+
+}
+
 
 var sharebtn = document.getElementById('sharebtn');
 if (!navigator.share) {
     sharebtn.style.display = "none";
 }
+
+window.addEventListener('load', () => {
+    if (localStorage.getItem('loggedIn') !== 'true') {
+
+        document.querySelector('#pow-login').configure({
+            strings: {
+                label: 'Prüfe auf Roboter...',
+                verified: "Student erkannt",
+                verifying: "Prüfe auf Roboter...",
+                error: "Fehler. Roboter erkannt!",
+
+            },
+        });
+    }
+});
+document.querySelector('#pow-login').addEventListener('statechange', (ev) => {
+    if (ev.detail.state === 'verified') {
+        powverified = true;
+        powpayload = ev.detail.payload;
+        submitemail.removeAttribute("disabled");
+    }
+});
+var loggedIn = localStorage.getItem('loggedIn');
+var stop = false;
+setInterval(() => {
+    if (localStorage.getItem('loggedIn') === 'true' && !loggedIn && !stop) {
+        stop = true;
+        window.location.reload();
+    } else if (localStorage.getItem('loggedIn') == null && loggedIn && !stop) {
+        stop = true;
+        window.location.reload();
+    }
+}, 1000);

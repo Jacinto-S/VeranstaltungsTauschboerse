@@ -85,6 +85,7 @@ public class KalenderController {
         kalenderRepository.save(kalender);
     }
 
+    @SuppressWarnings("null")
     @GetMapping(value = "/removeTermin")
     public void removeTermin(@RequestParam long terminid) {
         User user = UserUtil.getUser();
@@ -96,11 +97,36 @@ public class KalenderController {
             return;
         }
         KalenderTermin termin = kalenderTerminRepository.findById(terminid).orElse(null);
-        if (termin == null || termin.getType() != KalenderTerminType.V) {
+        if (termin == null) {
             return;
         }
         if (kalender.getTermine().stream().noneMatch(t -> t.id == terminid)) {
+            // search all tauschtermine for this termin
+            List<TauschTermin> tauschTermine = tauschTerminRepository.findTauschTerminByUserid(user.getId());
+            TauschTermin tauschTerminToRemove = null;
+            KalenderTermin terminToRemove = null;
+            for (TauschTermin tauschTermin : tauschTermine) {
+                for (KalenderTermin t : tauschTermin.getGesucht()) {
+                    if (t.getId() == terminid) {
+                        terminToRemove = t;
+                        tauschTerminToRemove = tauschTermin;
+                        break;
+                    }
+                }
+                if (terminToRemove != null) {
+                    tauschTerminToRemove.getGesucht().remove(terminToRemove);
+                    // save
+                    tauschTerminRepository.save(tauschTerminToRemove);
+                    // if length of gesucht is 0, delete tauschTermin
+                    if (tauschTerminToRemove.getGesucht().size() == 0) {
+                        tauschTerminRepository.delete(tauschTerminToRemove);
+                    }
+                    logger.info(String.format("User %s removed a single Offer", user.getHsMail()));
+                    break;
+                }
+            }
             return;
+
         }
 
         kalender.getTermine().remove(termin);
@@ -138,95 +164,124 @@ public class KalenderController {
             kalenderList.get(day).add(terminDTO);
         }
 
+        // find all termine not of type V from user
+        List<KalenderTermin> termina = null;
+        termina = kalender.getTermine().stream().filter(t -> t.getType() != KalenderTerminType.V)
+                .toList();
+
         // User wants to see possible offers for a specific termin
-        if (terminid != null) {
-            String[] starts = { "08:15", "10:00", "11:45", "14:15", "16:00", "17:45", "19:30" };
-            String[] ends = { "09:45", "11:30", "13:15", "15:45", "17:30", "19:15", "21:00" };
-            List<TauschTermin> termine = tauschTerminRepository.findAll();
-            termine.sort((a, b) -> a.gesucht.size() - b.gesucht.size());
-
-            KalenderTermin usersTermin = kalenderTerminRepository.findById(Long.parseLong(terminid))
-                    .orElse(null);
-            if (usersTermin == null) {
-                return ResponseEntity.badRequest().body("No termin found");
+        boolean overwiew = terminid == null;
+        String realTitle = "";
+        String termincopy = terminid;
+        String[] starts = { "08:15", "10:00", "11:45", "14:15", "16:00", "17:45", "19:30" };
+        String[] ends = { "09:45", "11:30", "13:15", "15:45", "17:30", "19:15", "21:00" };
+        for (KalenderTermin ter : termina) {
+            terminid = "" + ter.getId();
+            if (termincopy != null && termincopy.equals(terminid)) {
+                realTitle = ter.getName();
             }
-            String title = usersTermin.getName().split("\\(")[0];
-            c.setTime(usersTermin.getStart());
-            String userstart = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
-                    c.get(Calendar.MINUTE));
-            c.setTime(usersTermin.getEnd());
-            int userday = c.get(Calendar.DAY_OF_WEEK) - 2;
+            if (terminid != null) {
 
-            for (TauschTermin termin : termine) {
-                if (termin.angebot.getName().indexOf(title) == -1) {
-                    continue;
+                List<TauschTermin> termine = tauschTerminRepository.findAll();
+                termine.sort((a, b) -> a.gesucht.size() - b.gesucht.size());
+
+                KalenderTermin usersTermin = kalenderTerminRepository.findById(Long.parseLong(terminid))
+                        .orElse(null);
+                if (usersTermin == null) {
+                    return ResponseEntity.badRequest().body("No termin found");
                 }
+                String title = usersTermin.getName().split("\\(")[0];
+                c.setTime(usersTermin.getStart());
+                String userstart = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
+                        c.get(Calendar.MINUTE));
+                c.setTime(usersTermin.getEnd());
+                int userday = c.get(Calendar.DAY_OF_WEEK) - 2;
 
-                if (termin.userid != user.getId() && usersTermin.getType() == termin.angebot.getType()) {
-                    KalenderTermin kalenderTermin = termin.angebot;
-                    if (usersTermin.getStart().equals(kalenderTermin.getStart())
-                            && usersTermin.getName().indexOf(title) == -1) {
+                for (TauschTermin termin : termine) {
+                    if (termin.angebot.getName().indexOf(title) == -1) {
                         continue;
                     }
-                    for (KalenderTermin ge : termin.getGesucht()) {
-                        c.setTime(ge.getStart());
-                        String start = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
-                                c.get(Calendar.MINUTE));
 
-                        c.setTime(ge.getEnd());
+                    if (termin.userid != user.getId() && usersTermin.getType() == termin.angebot.getType()) {
+                        KalenderTermin kalenderTermin = termin.angebot;
+                        if (usersTermin.getStart().equals(kalenderTermin.getStart())
+                                && usersTermin.getName().indexOf(title) == -1) {
+                            continue;
+                        }
+                        for (KalenderTermin ge : termin.getGesucht()) {
+                            c.setTime(ge.getStart());
+                            String start = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
+                                    c.get(Calendar.MINUTE));
 
-                        if (userstart.equals(start) && c.get(Calendar.DAY_OF_WEEK) - 2 == userday) {
-                            KalenderTermin angebot = termin.angebot;
-                            Date sDate = angebot.getStart();
+                            c.setTime(ge.getEnd());
+
+                            if (userstart.equals(start) && c.get(Calendar.DAY_OF_WEEK) - 2 == userday) {
+                                KalenderTermin angebot = termin.angebot;
+                                Date sDate = angebot.getStart();
+                                c.setTime(sDate);
+                                String angebotstart = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
+                                        c.get(Calendar.MINUTE));
+                                c.setTime(angebot.getEnd());
+                                String angebotend = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
+                                        c.get(Calendar.MINUTE));
+
+                                KalenderTerminDTO terminDTO = new KalenderTerminDTO(angebot.getName(), "OFFER",
+                                        angebot.getType().getColorCode(), angebotstart, angebotend, angebot.id);
+                                c.setTime(angebot.getStart());
+                                int theday = c.get(Calendar.DAY_OF_WEEK) - 2;
+
+                                boolean found = false;
+                                KalenderTerminDTO override = null;
+                                for (KalenderTerminDTO check : kalenderList.get(theday)) {
+                                    if (check.start().equalsIgnoreCase(terminDTO.start())
+                                            && check.end().equalsIgnoreCase(terminDTO.end())) {
+                                        found = true;
+                                        if (check.subtext.equalsIgnoreCase("ANGEFRAGT")) {
+                                            override = check;
+                                        }
+                                        break;
+                                    }
+                                }
+                                if (!found) {
+                                    kalenderList.get(theday).add(terminDTO);
+                                } else if (override != null) {
+                                    kalenderList.get(theday).remove(override);
+                                    kalenderList.get(theday).add(terminDTO);
+                                }
+                                break;
+                            }
+
+                        }
+                    } else if (usersTermin.getType() == termin.angebot.getType()) {
+                        for (KalenderTermin ge : termin.gesucht) {
+                            c.setTime(ge.getStart());
+
+                            Date sDate = ge.getStart();
                             c.setTime(sDate);
+                            if (termincopy != null && !terminid.equals(termincopy)) {
+                                continue;
+                            }
                             String angebotstart = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
                                     c.get(Calendar.MINUTE));
-                            c.setTime(angebot.getEnd());
+                            c.setTime(ge.getEnd());
                             String angebotend = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
                                     c.get(Calendar.MINUTE));
 
-                            KalenderTerminDTO terminDTO = new KalenderTerminDTO(angebot.getName(), "OFFER",
-                                    angebot.getType().getColorCode(), angebotstart, angebotend, angebot.id);
-                            c.setTime(angebot.getStart());
+                            //
+
+                            KalenderTerminDTO terminDTO = new KalenderTerminDTO(ge.getName(), "ANGEFRAGT",
+                                    ge.getType().getColorCode(), angebotstart, angebotend, ge.id);
+                            c.setTime(ge.getStart());
                             int theday = c.get(Calendar.DAY_OF_WEEK) - 2;
+                            kalenderList.get(theday).add(terminDTO);
 
-                            boolean found = false;
-                            for (KalenderTerminDTO check : kalenderList.get(theday)) {
-                                if (check.start().equalsIgnoreCase(terminDTO.start())
-                                        && check.end().equalsIgnoreCase(terminDTO.end())) {
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            if (!found) {
-                                kalenderList.get(theday).add(terminDTO);
-                            }
-                            break;
                         }
-
-                    }
-                } else if (usersTermin.getType() == termin.angebot.getType()) {
-                    for (KalenderTermin ge : termin.gesucht) {
-                        c.setTime(ge.getStart());
-
-                        Date sDate = ge.getStart();
-                        c.setTime(sDate);
-                        String angebotstart = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
-                                c.get(Calendar.MINUTE));
-                        c.setTime(ge.getEnd());
-                        String angebotend = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
-                                c.get(Calendar.MINUTE));
-
-                        KalenderTerminDTO terminDTO = new KalenderTerminDTO(ge.getName(), "ANGEFRAGT",
-                                ge.getType().getColorCode(), angebotstart, angebotend, ge.id);
-                        c.setTime(ge.getStart());
-                        int theday = c.get(Calendar.DAY_OF_WEEK) - 2;
-                        kalenderList.get(theday).add(terminDTO);
-
                     }
                 }
-            }
 
+            }
+        }
+        if (!overwiew)
             for (int i = 0; i != 5; i++) {
                 List<KalenderTerminDTO> day = kalenderList.get(i);
                 for (int j = 0; j != 7; j++) {
@@ -239,13 +294,12 @@ public class KalenderController {
                     }
                     if (!found) {
                         String colorcodelightblue = "rgba(227, 227, 227, 0.4)";
-                        day.add(new KalenderTerminDTO(title, "",
+                        day.add(new KalenderTerminDTO(realTitle.split("\\(")[0], "",
                                 colorcodelightblue, starts[j],
                                 ends[j], -1));
                     }
                 }
             }
-        }
 
         ObjectMapper objectMapper = new ObjectMapper();
 

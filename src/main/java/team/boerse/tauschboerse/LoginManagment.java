@@ -22,6 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import team.boerse.tauschboerse.captcha.CaptchaController;
+import team.boerse.tauschboerse.config.CustomTokenFilter;
 import team.boerse.tauschboerse.mail.MailUtils;
 
 @EnableScheduling
@@ -31,15 +33,18 @@ public class LoginManagment {
 	@Autowired
 	UserRepository userRepository;
 
+	@Autowired
+	CaptchaController captchaController;
+
+	@Autowired
+	KalenderRepository kalenderRepository;
+
 	HashMap<String, String> tokens = new HashMap<>();
 	HashMap<String, Long> removeTimerForTokens = new HashMap<>();
 	HashMap<InetAddress, Integer> requestCounter = new HashMap<>();
 	HashMap<InetAddress, Long> lastRequest = new HashMap<>();
 
 	Logger logger = LoggerFactory.getLogger(LoginManagment.class);
-
-	@Value("${amountOfRequest:2147483647}")
-	String amountOfRequest = "2147483647";
 
 	@Scheduled(fixedDelay = 60000)
 	public void removeExpiredTokens() {
@@ -74,31 +79,21 @@ public class LoginManagment {
 	String domain;
 
 	@GetMapping("/requestLogin")
-	public ResponseEntity<String> requestLogin(@RequestParam String hsMail, HttpServletRequest request,
+	public ResponseEntity<String> requestLogin(@RequestParam String hsMail, @RequestParam String pow,
+			HttpServletRequest request,
 			HttpServletResponse response) {
 
 		if (!isCorrectMailFormat(hsMail)) {
 			return ResponseEntity.badRequest().body("Invalid mail format");
 		}
 
-		try {
-			InetAddress ip = InetAddress.getByName(request.getRemoteAddr());
-			if (requestCounter.containsKey(ip)) {
-				requestCounter.put(ip, requestCounter.get(ip) + 1);
-				lastRequest.put(ip, System.currentTimeMillis());
-				if (requestCounter.get(ip) > Integer.parseInt(amountOfRequest)
-						&& (lastRequest.get(ip) + 1000 * 60 * 60 * 6 > System.currentTimeMillis())) {
-					logger.warn(String.format("Too many requests from %s", ip));
-					return ResponseEntity.badRequest().body("Too many requests");
-
-				}
-			} else {
-				requestCounter.put(ip, 1);
-			}
-
-		} catch (UnknownHostException e) {
-			return ResponseEntity.badRequest().body("Invalid IP");
+		String payload = "{\"payload\":\"" + pow + "\"}";
+		long currentTime = System.currentTimeMillis();
+		if (!captchaController.checkSolution(payload)) {
+			return ResponseEntity.badRequest().body("Invalid captcha");
 		}
+		System.out.println("Checking captcha took " + (System.currentTimeMillis() - currentTime) + " ms");
+
 		User user = userRepository.findByHsMail(hsMail).orElse(null);
 		if (user != null && (user.isBanned() != null && user.isBanned())) {
 			return ResponseEntity.status(403).body("User is banned: " + user.getBanReason());
@@ -107,8 +102,15 @@ public class LoginManagment {
 		String token = UUID.randomUUID().toString();
 		tokens.put(token, hsMail);
 		removeTimerForTokens.put(token, System.currentTimeMillis() + 1000 * 60 * 10);
+
+		boolean calendarExists = user != null && kalenderRepository.findByUserId(user.getId()) != null;
+
 		MailUtils.sendMail(hsMail, null, "Anmeldelink für die Tauschbörse",
-				"Klicke hier um dich anzumelden:\n" + domain + "/?logintoken=" + token);
+				"Klicke hier um dich anzumelden:\n<a href='" + domain + "/?logintoken=" + token + "'>" + domain
+						+ "/?logintoken=" + token + "</a>"
+						+ (!calendarExists
+								? "\n\nDu benötigst eine Kalenderdatei. Lade sie hier direkt herunter:\n<a href='https://aor.cs.hs-rm.de/plans.ics?user_plan=true'>plans.ics herunterladen</a>"
+								: ""));
 
 		return ResponseEntity.ok().build();
 	}
@@ -130,10 +132,10 @@ public class LoginManagment {
 		boolean newUser = false;
 		if (user == null) {
 			newUser = true;
-			user = new User(hsMail, null, accessToken, null, null);
+			user = new User(hsMail, null, null, null);
 		}
-		user.setAccessToken(accessToken);
-		Cookie cookie = new Cookie("sessionToken", user.getAccessToken());
+		user.getAccessToken().add(accessToken);
+		Cookie cookie = new Cookie("sessionToken", accessToken);
 		cookie.setMaxAge(60 * 60 * 24 * 30);
 		cookie.setHttpOnly(true);
 		cookie.setPath("/");
@@ -165,11 +167,11 @@ public class LoginManagment {
 
 		User user = userRepository.findByHsMail(hsMail).orElse(null);
 		if (user == null) {
-			user = new User(hsMail, null, UUID.randomUUID().toString(), false, "");
+			user = new User(hsMail, null, false, "");
 		}
 		String accessToken = UUID.randomUUID().toString();
-		user.setAccessToken(accessToken);
-		Cookie cookie = new Cookie("sessionToken", user.getAccessToken());
+		user.getAccessToken().add(accessToken);
+		Cookie cookie = new Cookie("sessionToken", accessToken);
 		cookie.setMaxAge(60 * 60 * 24 * 30);
 		cookie.setHttpOnly(true);
 		cookie.setPath("/");
@@ -180,19 +182,25 @@ public class LoginManagment {
 	}
 
 	@GetMapping("/logmeout")
-	public ResponseEntity<String> logout(HttpServletResponse response) {
+	public ResponseEntity<String> logout(HttpServletRequest request, HttpServletResponse response,
+			@RequestParam(defaultValue = "false", required = false) boolean all) {
 		User user = UserUtil.getUser();
 		if (user == null) {
 			return ResponseEntity.badRequest().body("User not logged in");
 		}
-		user.setAccessToken(null);
+		if (all) {
+			String token = CustomTokenFilter.extractToken(request);
+			user.getAccessToken().removeIf(e -> !e.equals(token));
+		} else {
+			user.getAccessToken().remove(CustomTokenFilter.extractToken(request));
+			Cookie cookie = new Cookie("sessionToken", "");
+			cookie.setMaxAge(0);
+			cookie.setHttpOnly(true);
+			cookie.setPath("/");
+			response.setHeader("Set-Cookie", UserUtil.convertCookieToSetCookie(cookie));
+		}
 		userRepository.save(user);
 
-		Cookie cookie = new Cookie("sessionToken", "");
-		cookie.setMaxAge(0);
-		cookie.setHttpOnly(true);
-		cookie.setPath("/");
-		response.setHeader("Set-Cookie", UserUtil.convertCookieToSetCookie(cookie));
 		return ResponseEntity.ok().build();
 	}
 
@@ -206,12 +214,13 @@ public class LoginManagment {
 	}
 
 	@GetMapping("/updatePrivateMail")
-	public ResponseEntity<String> updatePrivateMail(@RequestParam String privateMail) {
+	public ResponseEntity<String> updatePrivateMail(@RequestParam(required = false) String privateMail) {
 		User user = UserUtil.getUser();
 		if (user == null) {
 			return ResponseEntity.badRequest().body("User not logged in");
 		}
-		logger.info(String.format("User %s updated private mail to %s", user.getHsMail(), privateMail));
+		logger.info(String.format("User %s updated private mail to %s", user.getHsMail(),
+				privateMail == null ? "null" : privateMail));
 		user.setPrivateMail(privateMail);
 		userRepository.save(user);
 		return ResponseEntity.ok().build();

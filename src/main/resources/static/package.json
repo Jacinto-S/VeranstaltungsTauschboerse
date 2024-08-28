@@ -10,14 +10,16 @@
   },
   "devDependencies": {
     "sass": "^1.74.1",
-    "vite": "^5.1.6"
+    "vite": "^5.4.2"
   },
   "dependencies": {
     "@popperjs/core": "^2.11.8",
+    "altcha": "^0.6.7",
     "bootstrap": "^5.3.3",
     "ical": "^0.8.0",
     "lightningcss": "^1.24.1",
     "path": "^0.12.7",
-    "sanitize-html": "^2.13.0"
+    "sanitize-html": "^2.13.0",
+    "vite-project": "file:"
   }
 }

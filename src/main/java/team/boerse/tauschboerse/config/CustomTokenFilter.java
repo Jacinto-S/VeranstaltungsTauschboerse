@@ -1,6 +1,7 @@
 package team.boerse.tauschboerse.config;
 
 import java.io.IOException;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.context.request.RequestAttributes;
@@ -21,6 +22,7 @@ public class CustomTokenFilter extends OncePerRequestFilter {
     @Autowired
     private UserRepository userRepository;
 
+    @SuppressWarnings("null")
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
@@ -28,7 +30,10 @@ public class CustomTokenFilter extends OncePerRequestFilter {
         User us = null;
         if (token != null) {
             us = userRepository.findByAccessToken(token);
-            String sessionToken = us == null ? null : us.getAccessToken();
+            List<String> sessionToken = us == null ? null : us.getAccessToken();
+
+            boolean isTokenValid = sessionToken != null && sessionToken.contains(token);
+
             if (us == null || (us.isBanned() != null && us.isBanned())) {
                 Cookie cookie = new Cookie("sessionToken", null);
                 cookie.setMaxAge(0);
@@ -39,7 +44,7 @@ public class CustomTokenFilter extends OncePerRequestFilter {
                 return;
             }
 
-            if (sessionToken == null) {
+            if (!isTokenValid) {
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -54,7 +59,7 @@ public class CustomTokenFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private String extractToken(jakarta.servlet.http.HttpServletRequest request) {
+    public static String extractToken(jakarta.servlet.http.HttpServletRequest request) {
         if (request.getCookies() != null) {
             for (Cookie cookie : request.getCookies()) {
                 if ("sessionToken".equals(cookie.getName())) {

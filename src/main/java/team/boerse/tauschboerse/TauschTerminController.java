@@ -1,9 +1,14 @@
 package team.boerse.tauschboerse;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,6 +107,7 @@ public class TauschTerminController {
         kalenderUser.getTermine().remove(oldTerminOfUser);
         kalenderUser.getTermine().remove(kalenderTermin);
         kalenderUser.getTermine().add(newTerminForUser);
+
         kalenderRepository.save(kalenderUser);
 
         Kalender kalenderTauschPartner = kalenderRepository.findByUserId(tauschPartner.getId());
@@ -130,10 +136,14 @@ public class TauschTerminController {
         kalenderTerminRepository.delete(oldTerminOfUser);
         kalenderTerminRepository.delete(kalenderTermin);
         tauschTerminRepository.delete(tauschTermin);
+        clearOverlappingTauschtermine(user, tauschPartner, newTerminForUser, newTerminForTauschPartner);
 
-        String infosForFrontend = createConfirmationText(tauschPartner, newTerminForUser,
+        // remove All Offers for User and Tauschpartner if on same day and time as new
+        // Termin
+
+        String infosForFrontend = createConfirmationText(null, tauschPartner, newTerminForUser,
                 newTerminForTauschPartner);
-        String infosForTauschPartner = createConfirmationText(user, newTerminForTauschPartner,
+        String infosForTauschPartner = createConfirmationText(tauschPartner, user, newTerminForTauschPartner,
                 newTerminForUser);
         MailUtils.sendMail(user.getHsMail(), user.getPrivateMail(), "Informationen zum Tausch", infosForFrontend);
 
@@ -143,19 +153,126 @@ public class TauschTerminController {
         return ResponseEntity.ok().body(infosForFrontend);
     }
 
-    private String createConfirmationText(User tauschPartner, KalenderTermin newTerminForUser,
+    private String createConfirmationText(User user, User tauschPartner, KalenderTermin newTerminForUser,
             KalenderTermin newTerminForTauschPartner) {
+        String[] floskeln = {
+                "Wir beide würden uns sehr freuen, wenn der Tausch möglich wäre.",
+                "Wir hoffen auf eine positive Rückmeldung.",
+                "Vielen Dank für Ihre Unterstützung!",
+        };
+        String[] anrede = {
+                "Sehr geehrte Damen und Herren,",
+                "Hallo,",
+                "Guten Tag,"
+        };
+
+        String[] titles = {
+                "Gruppentausch " + newTerminForUser.getName().split(" ")[0],
+                "Gruppenwechsel " + newTerminForUser.getName().split(" ")[0],
+                "Gruppentausch Lehrveranstaltung " + newTerminForUser.getName().split(" ")[0],
+        };
+
+        String zufaelligerTitle = titles[(int) (Math.random() * titles.length)];
+        String zufaelligeAnrede = anrede[(int) (Math.random() * anrede.length)];
+        String zufaelligeFloskel = floskeln[(int) (Math.random() * floskeln.length)];
+
+        String userName = user == null ? "" : extractName(user.getHsMail());
+        String tauschPartnerName = extractName(tauschPartner.getHsMail());
+
+        String body = "";
+        if (user != null) {
+            body = zufaelligeAnrede + "\n\n" +
+                    tauschPartnerName + " und ich würden gerne die Gruppe tauschen, sofern dies möglich ist.\n\n"
+                    +
+                    tauschPartnerName + ":\n" + convertKalenderTerminToString(newTerminForUser)
+                    + (" (" + getGroupName(newTerminForUser)) + ") => " +
+                    convertKalenderTerminToString(newTerminForTauschPartner)
+                    + (" (" + getGroupName(newTerminForTauschPartner)) + ")\n\n"
+                    +
+                    userName + ":\n" + convertKalenderTerminToString(newTerminForTauschPartner)
+                    + (" (" + getGroupName(newTerminForTauschPartner)) + ") => " +
+                    convertKalenderTerminToString(newTerminForUser)
+                    + (" (" + getGroupName(newTerminForUser)) + ")\n\n" +
+                    zufaelligeFloskel + "\n\n" +
+                    "Mit freundlichen Grüßen\n" + userName;
+        }
+
+        String tauschPartnerEmail = tauschPartner.getHsMail();
+
         return "Die Tauschterminvermittlung war erfolgreich!\n\n" +
-                "Tauschpartner/in: " + extractName(tauschPartner.getHsMail()) + "\n\n"
-                + "Dein Termin " + newTerminForUser.getName() + " am "
-                + convertKalenderTerminToString(newTerminForTauschPartner)
-                + "\n"
-                + "kann mit dem Termin am " + convertKalenderTerminToString(newTerminForUser)
-                + " getauscht werden.\n\n"
-                + "Kontaktiere deine/n Tauschpartner/in unter " +
-                tauschPartner.getHsMail()
-                + " und sagt gemeinsam eurer Kursleitung Bescheid, dass ihr tauschen möchtet!\n\n"
-                + "Hat dir die Tauschbörse weitergeholfen? Dann empfiehl uns weiter und gib uns Feedback unter:\nhttps://tauschboerse.nkwebservices.de/#bewertungen";
+                "Tauschpartner/in: " + tauschPartnerName + "\n\n" +
+                "Dein Termin " + newTerminForUser.getName() + " am " +
+                convertKalenderTerminToString(newTerminForTauschPartner) + "\n" +
+                "kann mit dem Termin am " + convertKalenderTerminToString(newTerminForUser) +
+                " getauscht werden.\n\n" +
+                "Kontaktiere deine/n Tauschpartner/in unter " + tauschPartnerEmail +
+                " und sagt gemeinsam eurer Kursleitung Bescheid, dass ihr tauschen möchtet!\n\n"
+                + (user != null
+                        ? "Du kannst deinen Dozenten entweder selbst anschreiben oder unsere unverbindliche Vorlage verwenden:\n <a href=\""
+                                + createMailtoLink(null, tauschPartnerEmail, zufaelligerTitle, body)
+                                + "\">Vorlage verwenden</a>\n\n"
+
+                        : "\n\n")
+                + "Hat dir die Tauschbörse weitergeholfen? Dann empfiehl uns weiter und gib uns Feedback unter:\n"
+                + (user != null
+                        ? "<a href='https://tauschboerse.nkwebservices.de/#bewertungen'>https://tauschboerse.nkwebservices.de/#bewertungen</a>"
+                        : "https://tauschboerse.nkwebservices.de/#bewertungen");
+    }
+
+    public String getGroupName(KalenderTermin termin) {
+        String name = termin.getName();
+        Pattern pattern = Pattern.compile("\\((\\w+)-([A-Z])\\)");
+        Matcher matcher = pattern.matcher(name);
+        if (matcher.find()) {
+            return matcher.group(2);
+        }
+        return "";
+    }
+
+    public void clearOverlappingTauschtermine(User u, User tauschpartner, KalenderTermin termin,
+            KalenderTermin terminTauschpartner) {
+        List<TauschTermin> tauschTermine = tauschTerminRepository.findTauschTerminByUserid(u.getId());
+        List<TauschTermin> tauschTermineTauschpartner = tauschTerminRepository
+                .findTauschTerminByUserid(tauschpartner.getId());
+        List<TauschTermin> tauschTermineToDelete = new ArrayList<>();
+
+        for (TauschTermin tauschTermin : tauschTermine) {
+            tauschTermin.getGesucht().removeIf(t -> compareKalenderTermin(t, termin) && termin.getId() != t.getId());
+            if (tauschTermin.getGesucht().isEmpty()) {
+                tauschTermineToDelete.add(tauschTermin);
+            }
+        }
+        for (TauschTermin tauschTermin : tauschTermineTauschpartner) {
+            tauschTermin.getGesucht().removeIf(
+                    t -> compareKalenderTermin(t, terminTauschpartner) && terminTauschpartner.getId() != t.getId());
+            if (tauschTermin.getGesucht().isEmpty()) {
+                tauschTermineToDelete.add(tauschTermin);
+            }
+        }
+        tauschTerminRepository.saveAll(tauschTermine);
+        tauschTerminRepository.saveAll(tauschTermineTauschpartner);
+        tauschTerminRepository.deleteAll(tauschTermineToDelete);
+
+    }
+
+    public boolean compareKalenderTermin(KalenderTermin termin1, KalenderTermin termin2) {
+        Date termin1StartDate = removeSecondsAndMillis(termin1.getStart());
+        Date termin2StartDate = removeSecondsAndMillis(termin2.getStart());
+        Date termin1EndDate = removeSecondsAndMillis(termin1.getEnd());
+        Date termin2EndDate = removeSecondsAndMillis(termin2.getEnd());
+
+        return termin1StartDate.equals(termin2StartDate) && termin1EndDate.equals(termin2EndDate);
+    }
+
+    private Date removeSecondsAndMillis(Date date) {
+        if (date == null) {
+            return null;
+        }
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(date);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        return cal.getTime();
     }
 
     public String convertKalenderTerminToString(KalenderTermin termin) {
@@ -180,6 +297,39 @@ public class TauschTerminController {
         String nachname = name[1].toUpperCase().charAt(0) + name[1].substring(1);
 
         return vorname + " " + nachname;
+    }
+
+    public static String createMailtoLink(String to, String cc, String subject, String body) {
+        StringBuilder mailto = new StringBuilder("mailto:");
+
+        try {
+            if (to != null && !to.isEmpty()) {
+                mailto.append(URLEncoder.encode(to, "UTF-8"));
+            }
+
+            boolean firstParam = true;
+
+            if (cc != null && !cc.isEmpty()) {
+                mailto.append(firstParam ? "?" : "&");
+                mailto.append("cc=").append(URLEncoder.encode(cc, "UTF-8"));
+                firstParam = false;
+            }
+
+            if (subject != null && !subject.isEmpty()) {
+                mailto.append(firstParam ? "?" : "&");
+                mailto.append("subject=").append(URLEncoder.encode(subject, "UTF-8"));
+                firstParam = false;
+            }
+
+            if (body != null && !body.isEmpty()) {
+                mailto.append(firstParam ? "?" : "&");
+                mailto.append("body=").append(URLEncoder.encode(body, "UTF-8").replace("+", "%20"));
+            }
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+
+        return mailto.toString();
     }
 
     record UserKalenderTerminDTO(String title, String subtext, String color, String start, String end, int day) {

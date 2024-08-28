@@ -30,14 +30,26 @@ public class MailUtils {
     public static void sendMail(String to, String cc, String subject, String text) {
         logger.info(String.format("Sending mail to %s with subject %s and text %s", to, subject, text));
         mails.add(new Mail(to, cc, subject, text));
+
+        Thread thread = new Thread(() -> {
+            try {
+                sendMails();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+        thread.start();
+        lastCheck = System.currentTimeMillis();
+
     }
 
     private static ArrayList<Mail> mails = new ArrayList<>();
     private static boolean isSending = false;
+    private static long lastCheck = 0;
 
-    @Scheduled(fixedDelay = 1000)
+    @Scheduled(fixedDelay = 2000)
     public static void sendMails() {
-        if (mails.isEmpty() || isSending)
+        if (mails.isEmpty() || isSending || (System.currentTimeMillis() - lastCheck < 1000))
             return;
         Mail mail = mails.remove(0);
         isSending = true;
@@ -88,16 +100,18 @@ public class MailUtils {
         });
 
         try {
-            Message message = new MimeMessage(session);
+            MimeMessage message = new MimeMessage(session);
             message.setFrom(new InternetAddress(smtpUsername));
 
             if (cc != null && !cc.isEmpty()) {
                 message.setRecipients(Message.RecipientType.CC, InternetAddress.parse(cc));
             }
             message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(recipient));
-            message.setHeader("Content-Type", "text/plain; charset=UTF-8");
+            message.setHeader("Content-Type", "text/html; charset=UTF-8");
             message.setSubject(subject);
-            message.setText(text);
+            text = text.replaceAll("\\n", "<br>");
+            message.setText(text, "utf-8", "html");
+
             Transport.send(message);
             logger.info(String.format("E-Mail an %s gesendet", recipient));
         } catch (MessagingException e) {

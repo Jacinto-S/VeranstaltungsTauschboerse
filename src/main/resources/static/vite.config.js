@@ -12,8 +12,27 @@ export default {
     },
     server: {
         port: 5173,
-        hot: true
+        hot: true,
+        proxy: {
+            '/verify': {
+                target: "http://localhost:8085",
+                changeOrigin: true,
+                secure: false,
+
+            },
+            '/challenge': {
+                target: "http://localhost:8085",
+                changeOrigin: true,
+                secure: false,
+
+            }
+        },
+        headers: {
+            "Referrer-Policy": "same-origin",
+        }
     },
+
+
     build: {
         cssMinify: "lightningcss",
         rollupOptions: {

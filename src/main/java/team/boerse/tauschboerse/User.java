@@ -1,9 +1,18 @@
 package team.boerse.tauschboerse;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 
 @Entity
 public class User {
@@ -13,22 +22,30 @@ public class User {
     private Long id;
     private String hsMail;
     private String privateMail;
-    private String accessToken;
+
+    @ElementCollection(fetch = FetchType.EAGER, targetClass = String.class)
+    @CollectionTable(name = "user_access_tokens")
+    private List<String> accessToken;
     private Boolean isBanned;
     private String banReason;
     private Boolean isAdmin;
 
     public User(String hsMail, String privateMail,
-            String accessToken,
             Boolean isBanned, String banReason) {
         this.hsMail = hsMail;
         this.privateMail = privateMail;
-        this.accessToken = accessToken;
         this.isBanned = isBanned;
         this.banReason = banReason;
     }
 
     public User() {
+    }
+
+    public List<String> getAccessToken() {
+        if (accessToken == null) {
+            accessToken = new ArrayList<>();
+        }
+        return accessToken;
     }
 
     public long getId() {
@@ -45,14 +62,6 @@ public class User {
 
     public void setPrivateMail(String privateMail) {
         this.privateMail = privateMail;
-    }
-
-    public String getAccessToken() {
-        return accessToken;
-    }
-
-    public void setAccessToken(String accessToken) {
-        this.accessToken = accessToken;
     }
 
     public Boolean isBanned() {
