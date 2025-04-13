@@ -124,45 +124,52 @@ var offer = null;
 var gesucht = [];
 
 var urlparams = new URLSearchParams(window.location.search);
-var logintoken = urlparams.get('logintoken');
+var logintoken = urlparams.get('otttoken');
 if (logintoken != null) {
     var url = "";
     if (isDev()) {
-        url = "http://" + window.location.hostname + ":8085/login";
+        url = "http://" + window.location.hostname + ":8085/login/ott";
     } else {
-        url = "/login";
+        url = "/login/ott";
     }
-    url = url + "?logintoken=" + logintoken;
+
     fetch(url, {
-        method: 'GET',
-        credentials: 'include'
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `token=${encodeURIComponent(logintoken)}`
+
     }).then(response => {
-        if (response.ok) {
-            response.text().then(data => {
-                if (data.indexOf("New") != -1) {
-                    localStorage.setItem('uploadLocalCalendar', "true");
-                    localStorage.setItem('loggedIn', "true");
-                    window.location.href = "/";
-                } else {
-                    localStorage.setItem('loggedIn', "true");
-                    localStorage.removeItem('tempCalendar');
-                    window.location.href = "/";
-
-                }
-
-            });
-
+        // if is redirect, then ok
+        if (response.status == 201) {
+            localStorage.setItem('uploadLocalCalendar', "true");
+        } else if (response.status == 200) {
+            localStorage.removeItem('uploadLocalCalendar');
+        }
+        if (response.status == 201 || response.status == 200) {
+            localStorage.setItem('loggedIn', "true");
+            isLoggedIn = true;
+            window.history.replaceState({}, document.title, "/");
+            window.location.href = "/?pk";
         } else {
             window.history.replaceState({}, document.title, "/");
             setTimeout(() => {
                 showMessage("Anmeldung fehlgeschlagen", "Der Anmeldungslink ist abgelaufen. Bitte versuche es erneut");
             }, 1000);
         }
+    }).catch(error => {
+        console.error('Error:', error);
+        window.history.replaceState({}, document.title, "/");
+        setTimeout(() => {
+            showMessage("Anmeldung fehlgeschlagen", "Der Anmeldungslink ist abgelaufen. Bitte versuche es erneut");
+        }, 1000);
     });
+
 } else {
 
 }
-
 
 
 
@@ -203,12 +210,12 @@ function requestLoginMail(notifyUser = true, toemail = email.value) {
     if (firstpart.includes(".")) {
         var url = "";
         if (isDev()) {
-            url = "http://" + window.location.hostname + ":8085/requestLogin";
+            url = "http://" + window.location.hostname + ":8085/ott/generate";
         } else {
-            url = "/requestLogin";
+            url = "/ott/generate";
         }
 
-        url = url + "?hsMail=" + toemail + "&pow=" + encodeURIComponent(powpayload);
+
         if (notifyUser) {
             submitemail.innerHTML = "<span class='spinner-border spinner-border-sm' role='status' aria-hidden='true'></span>";
             submitemail.disabled = true;
@@ -222,9 +229,15 @@ function requestLoginMail(notifyUser = true, toemail = email.value) {
         return;
     }
 
+    // Form data required for the request. Send hsMail as username and pow as pow
     fetch(url, {
-        method: 'GET',
-        credentials: 'include'
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `username=${encodeURIComponent(email.value)}&pow=${encodeURIComponent(powpayload)}`
+
     }).then(async response => {
         if (response.ok) {
             powpayload = "";
@@ -530,12 +543,28 @@ function getMyCalendar() {
         stateInfo.innerText = "Wähle die Termine aus, die du gerne hättest.";
     }
 
-
     fetch(url, {
         method: 'GET',
         credentials: 'include'
-    }).then(response => response.json()).then(data => {
-        showCalendar(data);
+    }).then(response => {
+        if (response.ok) {
+            return response.json().then(data => {
+                showCalendar(data);
+                localStorage.removeItem('uploadLocalCalendarIfNotExist');
+            });
+        } else {
+            if (localStorage.getItem('uploadLocalCalendarIfNotExist') === 'true') {
+                localStorage.removeItem('uploadLocalCalendarIfNotExist');
+                if (localStorage.getItem('tempCalendar') != null) {
+                    localStorage.setItem('uploadLocalCalendar', "true");
+                    checkCalendarAutoUpload();
+                }
+            }
+        }
+
+
+    }).catch(error => {
+        console.error('Error:', error);
     });
 }
 if (localStorage.getItem('loggedIn') === 'true') {
@@ -585,6 +614,9 @@ function showIcalCalendar(parsed) {
                     case "S":
                         event.color = '#556B2F';
                         break;
+                    case "SU":
+                        event.color = '#556B2F';
+                        break;
                     default:
                         event.color = 'grey';
                 }
@@ -624,6 +656,7 @@ function showCalendar(items) {
         return ((totalHours / (endHour - startHour)) * 100) + perc;
     }
 
+
     // Zeitskala hinzufügen
     const timeScaleEl = document.createElement('div');
     timeScaleEl.classList.add('time-scale');
@@ -648,6 +681,7 @@ function showCalendar(items) {
         dayEl.appendChild(dayHeader);
         var samestart = 0;
         var currentstart = 0;
+        var lastEnd = new Date(0, 0, 0, 0, 0);
         const currentDay = (count);
         items[count].sort((a, b) => {
             return a.start.localeCompare(b.start);
@@ -665,12 +699,28 @@ function showCalendar(items) {
                 samestart = 0;
             }
             currentstart = item.start;
-            console.log(currentstart);
+
+            // is item not 90 minutes long?
+            let starttime = item.start.split(":");
+            let endtime = item.end.split(":");
+            let start = new Date(0, 0, 0, starttime[0], starttime[1]);
+            let end = new Date(0, 0, 0, endtime[0], endtime[1]);
+            let diff = Math.abs(end - start) / 1000 / 60;
+
+
+            let isAllowed = diff == 90;
+            let isUnderOther = false;
+            if (start.getTime() < lastEnd.getTime()) {
+                isAllowed = false;
+                isUnderOther = true;
+            } else {
+                lastEnd = end;
+            }
 
             if (item.subtext.indexOf("OFFER") != -1) {
                 itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title)}</strong><hr class="title-line"><div class="badge text-bg-danger"  style="opacity:1!important;background-color::black!important;transform:brightness(0.8)">${sanitizeHtml(item.subtext)}</div>`;
 
-            } else if (item.subtext == "" && (item.title.indexOf("(P-") != -1 || item.title.indexOf("(Ü-") != -1 || item.title.indexOf("(S-") != -1) && item.title.match(/\(([^)]+)\)/)[1].split("-")[1] != undefined) {
+            } else if (item.subtext == "" && (item.title.indexOf("(P-") != -1 || item.title.indexOf("(Ü-") != -1 || item.title.indexOf("(S-") != -1 || item.title.indexOf("(SU-") != -1) && item.title.match(/\(([^)]+)\)/)[1].split("-")[1] != undefined) {
                 try {
                     var praktikumtype = item.title.match(/\(([^)]+)\)/)[1].split("-")[1];
                     itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title.split(" ")[0])}</strong><hr class="title-line"><p style="text-align: center;font-size: 28px;opacity: 0.7;color:#808080">${praktikumtype}</p>`;
@@ -707,7 +757,7 @@ function showCalendar(items) {
 
             try {
                 var eventtype = item.title.match(/\(([^)]+)\)/)[1].split("-")[0];
-                if (eventtype == "V" || item.subtext.indexOf("ANGEFRAGT") != -1) {
+                if (eventtype == "V" || item.subtext.indexOf("ANGEFRAGT") != -1 || !isAllowed) {
                     itemEl.style.cursor = "not-allowed";
                     if (loggedIn) {
                         var deletebtn = document.createElement('button');
@@ -785,8 +835,14 @@ function showCalendar(items) {
                 itemEl.style.outline = "3px solid #FB6D48";
                 itemEl.style.opacity = "1";
             }
+            if (!isAllowed) {
+                itemEl.title = "Das ist kein Standardtermin. Er kann leider nicht über diese Plattform getauscht werden.";
+            }
             itemEl.addEventListener('mousedown', function () {
                 if (item.subtext.indexOf("ANGEFRAGT") != -1) {
+                    return;
+                }
+                if (!isAllowed) {
                     return;
                 }
 
@@ -795,7 +851,7 @@ function showCalendar(items) {
                     var instance = Modal.getOrCreateInstance(document.getElementById('loginModal'));
                     instance.show();
                     setTimeout(function () {
-                        document.getElementById('email').focus();
+
                     }, 100);
                     return;
                 }
@@ -937,8 +993,9 @@ function showCalendar(items) {
                 }
 
             });
-
-            dayEl.appendChild(itemEl);
+            if (!isUnderOther) {
+                dayEl.appendChild(itemEl);
+            }
         });
 
         calendarEl.appendChild(dayEl);
@@ -966,6 +1023,7 @@ function manageVisibility() {
         document.getElementById('feedbackbtn').style.display = "inline";
         document.getElementById('privateMailBox').style.display = "block";
         document.getElementById('confirmOffer').style.visibility = "";
+        document.getElementById('createPasskey').style.display = "block";
 
     } else {
         document.getElementById('title').innerText = "Wochenkalender (Nicht eingeloggt)";
@@ -988,12 +1046,18 @@ fetch(whoamiurl, {
     if (response.ok) {
         response.text().then(data => {
             if (data.includes("student.hs-rm.de")) {
+                if (localStorage.getItem('loggedIn') == null) {
+                    localStorage.setItem('loggedIn', "true");
+                    localStorage.setItem('uploadLocalCalendarIfNotExist', "true");
+                    getMyCalendar();
+                }
                 loggedIn = true;
-                localStorage.setItem('loggedIn', "true");
+                isLoggedIn = true;
                 whoamidata = data;
                 document.getElementById('title').innerText = "Wochenkalender für " + extractName(whoamidata);
                 localStorage.setItem('whoami', extractName(whoamidata));
                 manageVisibility();
+
             } else {
                 if (logintoken != null) {
                     loggedIn = false;
@@ -1021,34 +1085,39 @@ function extractName(adress) {
 }
 
 // Auto Calendar Upload after Registration
-var url = "";
-if (isDev()) {
-    url = "http://" + window.location.hostname + ":8085/uploadKalender";
-} else {
-    url = "/uploadKalender";
+
+function checkCalendarAutoUpload() {
+    var url = "";
+    if (isDev()) {
+        url = "http://" + window.location.hostname + ":8085/uploadKalender";
+    } else {
+        url = "/uploadKalender";
+    }
+
+    if (localStorage.getItem('tempCalendar') != null && localStorage.getItem('loggedIn') !== 'true') {
+        showIcalCalendar(ical.parseICS(localStorage.getItem('tempCalendar')));
+    } else if (localStorage.getItem('uploadLocalCalendar') === 'true' && localStorage.getItem('tempCalendar') != null) {
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: localStorage.getItem('tempCalendar'),
+            credentials: 'include'
+        }).then(response => {
+            if (response.ok) {
+                localStorage.removeItem('uploadLocalCalendar');
+                localStorage.removeItem('tempCalendar');
+                alert("Dein Temporärer Kalender wurde erfolgreich hochgeladen");
+                getMyCalendar();
+            } else {
+                alert("Fehler beim Hochladen des Kalenders");
+            }
+        });
+    }
 }
 
-if (localStorage.getItem('tempCalendar') != null && localStorage.getItem('loggedIn') !== 'true') {
-    showIcalCalendar(ical.parseICS(localStorage.getItem('tempCalendar')));
-} else if (localStorage.getItem('uploadLocalCalendar') === 'true' && localStorage.getItem('tempCalendar') != null) {
-    fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: localStorage.getItem('tempCalendar'),
-        credentials: 'include'
-    }).then(response => {
-        if (response.ok) {
-            localStorage.removeItem('uploadLocalCalendar');
-            localStorage.removeItem('tempCalendar');
-            alert("Dein Temporärer Kalender wurde erfolgreich hochgeladen");
-            getMyCalendar();
-        } else {
-            alert("Fehler beim Hochladen des Kalenders");
-        }
-    });
-}
+checkCalendarAutoUpload();
 
 // Darkmode
 var darkmodeActive = localStorage.getItem('darkmode') === 'true' || localStorage.getItem('darkmode') === null;
@@ -1174,24 +1243,22 @@ demoLogin.addEventListener('click', function () {
 });
 
 var loginshowbtn = document.getElementById('loginshowbtn');
-var clearSessions = document.getElementById('clearSessions');
 loginshowbtn.addEventListener('mousedown', function () {
     if (localStorage.getItem('loggedIn') === 'true') {
         logout();
     } else {
         var instance = Modal.getOrCreateInstance(document.getElementById('loginModal'));
         instance.show();
-        setTimeout(function () {
-            document.getElementById('email').focus();
+        setTimeout(async function () {
+            // is passkey supported?
+            if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+                let doc = document.getElementById('passkey-login-button');
+                doc.focus();
+            } else {
+                document.getElementById('email').focus();
+
+            }
         }, 125);
-    }
-});
-clearSessions.addEventListener('click', function () {
-    if (localStorage.getItem('loggedIn') === 'true') {
-        logout(true);
-        e.preventDefault();
-    } else {
-        alert("Du bist nicht eingeloggt");
     }
 });
 
@@ -1259,14 +1326,293 @@ document.querySelector('#pow-login').addEventListener('statechange', (ev) => {
         submitemail.removeAttribute("disabled");
     }
 });
-var loggedIn = localStorage.getItem('loggedIn');
+var isLoggedIn = localStorage.getItem('loggedIn');
 var stop = false;
 setInterval(() => {
-    if (localStorage.getItem('loggedIn') === 'true' && !loggedIn && !stop) {
+    if (localStorage.getItem('loggedIn') === 'true' && !isLoggedIn && !stop) {
         stop = true;
         window.location.reload();
-    } else if (localStorage.getItem('loggedIn') == null && loggedIn && !stop) {
+    } else if (localStorage.getItem('loggedIn') == null && isLoggedIn && !stop) {
         stop = true;
         window.location.reload();
     }
 }, 1000);
+
+async function createPasskey() {
+    // Prüfen, ob der User angemeldet ist
+
+    try {
+        // Registrierungsoptionen vom Server abrufen
+        const optionsUrl = isDev()
+            ? `http://${window.location.hostname}:8085/webauthn/register/options`
+            : "/webauthn/register/options";
+        const csrfoptions = await getCsrfToken();
+
+        const optionsResponse = await fetch(optionsUrl, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                [csrfoptions.headerName]: csrfoptions.token
+            }
+        });
+        if (!optionsResponse.ok) {
+            throw new Error("Fehler beim Abrufen der Registrierungsoptionen");
+        }
+        const options = await optionsResponse.json();
+
+        // Base64url-kodierte Werte dekodieren (Challenge, user.id, excludeCredentials[].id)
+        options.challenge = base64urlToBuffer(options.challenge);
+        options.user.id = new Uint8Array(base64urlToBuffer(options.user.id));
+        if (options.excludeCredentials) {
+            options.excludeCredentials = options.excludeCredentials.map(cred => {
+                cred.id = new Uint8Array(base64urlToBuffer(cred.id));
+                return cred;
+            });
+        }
+
+        // Credential erstellen
+        const credential = await navigator.credentials.create({ publicKey: options });
+
+        // Das Credential-Objekt transformieren, sodass ArrayBuffers in base64url-kodierte Strings umgewandelt werden
+        const credentialData = transformCredential(credential);
+
+        // Label (z.B. aus einem Input-Feld) ermitteln – passe den Selector ggf. an
+        const label = document.getElementById('labelInput')?.value || "Default Label";
+
+        // Payload zusammenstellen: publicKey-Objekt mit dem Credential und dem Label
+        const payload = {
+            publicKey: {
+                credential: credentialData,
+                label: label
+            }
+        };
+
+        // Registrierungsdaten an den Server schicken
+        const registerUrl = isDev()
+            ? `http://${window.location.hostname}:8085/webauthn/register`
+            : "/webauthn/register";
+
+
+        const csrfregister = await getCsrfToken();
+        const registerResponse = await fetch(registerUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                [csrfregister.headerName]: csrfregister.token
+            },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        });
+        if (!registerResponse.ok) {
+            throw new Error("Fehler beim Erstellen des Passkeys");
+        }
+        alert("Passkey erfolgreich erstellt!");
+        var instance = Modal.getOrCreateInstance(document.getElementById('passkey-modal'), {
+            backdrop: 'static',
+            keyboard: false
+        });
+        instance.hide();
+
+    } catch (error) {
+        console.error("Error during passkey registration:", error);
+        alert("Fehler beim Erstellen des Passkeys. Entweder dein Browser oder Betriebssystem hat Probleme bei der Unterstützung von Passkeys oder du hast bereits einen Passkey erstellt.");
+    }
+}
+
+
+let passkey = document.getElementById('createPasskey');
+passkey.addEventListener('click', function () {
+    createPasskey();
+});
+
+
+
+
+
+// Hilfsfunktion: base64url-kodierten String in ArrayBuffer umwandeln
+function base64urlToBuffer(base64urlString) {
+    const padding = '='.repeat((4 - (base64urlString.length % 4)) % 4);
+    const base64 = (base64urlString + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+    const binary = atob(base64);
+    const buffer = new ArrayBuffer(binary.length);
+    const view = new Uint8Array(buffer);
+    for (let i = 0; i < binary.length; i++) {
+        view[i] = binary.charCodeAt(i);
+    }
+    return buffer;
+}
+
+// Hilfsfunktion: Wandelt das Credential-Objekt in ein JSON-kompatibles Format um
+function transformCredential(credential) {
+    const attestationObject = credential.response.attestationObject;
+    const clientDataJSON = credential.response.clientDataJSON;
+    return {
+        id: credential.id,
+        rawId: bufferToBase64url(new Uint8Array(credential.rawId)),
+        type: credential.type,
+        response: {
+            attestationObject: bufferToBase64url(new Uint8Array(attestationObject)),
+            clientDataJSON: bufferToBase64url(new Uint8Array(clientDataJSON))
+        },
+        clientExtensionResults: credential.getClientExtensionResults
+            ? credential.getClientExtensionResults()
+            : {}
+    };
+}
+
+
+// Hilfsfunktion: Wandelt einen Uint8Array in einen base64url-kodierten String um
+function bufferToBase64url(buffer) {
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    let base64 = btoa(binary);
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+async function getCsrfToken() {
+    const response = await fetch('/api/csrf-token', {
+        credentials: 'same-origin' // wichtig für Session-Cookies
+    });
+    return await response.json();
+}
+
+
+
+
+
+async function getAuthOptions() {
+    const csrf = await getCsrfToken();
+
+    // URL der Options-Anfrage; beachte ggf. deine Dev-/Prod-Logik
+    const authOptionsUrl = isDev()
+        ? `http://${window.location.hostname}:8085/webauthn/authenticate/options`
+        : "/webauthn/authenticate/options";
+
+    // Optional: Übermittle hier die eingegebene E‑Mail, wenn dein Backend danach filtert
+
+    // Hole die Authentifizierungsoptionen vom Server
+    const response = await fetch(authOptionsUrl, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            [csrf.headerName]: csrf.token
+        },
+        body: ""
+    });
+
+    if (!response.ok) {
+        console.log("Keine Passkey-Optionen erhalten oder Fehler bei der Anfrage");
+        return;
+    }
+
+    // Zuerst den JSON-Response parsen
+    const options = await response.json();
+
+    // Jetzt die base64url-kodierten Binärwerte dekodieren
+    options.challenge = base64urlToBuffer(options.challenge);
+    if (options.allowCredentials) {
+        options.allowCredentials = options.allowCredentials.map(cred => {
+            cred.id = base64urlToBuffer(cred.id);
+            return cred;
+        });
+    }
+
+
+
+    return options;
+}
+
+document.getElementById('passkey-login-button').addEventListener('click', async function () {
+    try {
+        const csrf = await getCsrfToken();
+
+
+
+        // Navigator für Authentifizierung aufrufen
+        const assertion = await navigator.credentials.get({ publicKey: await getAuthOptions() });
+        const assertionData = transformAssertion(assertion);
+        handlePasskeyLogin(assertionData);
+
+    } catch (error) {
+        console.error("Fehler während der Passkey-Authentifizierung:", error);
+    }
+});
+
+async function handlePasskeyLogin(assertionData) {
+    // Sende die authentifizierten Daten an den Server
+    const loginUrl = isDev()
+        ? `http://${window.location.hostname}:8085/login/webauthn`
+        : "/login/webauthn";
+
+    const logincsrf = await getCsrfToken();
+
+    const loginResponse = await fetch(loginUrl, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            [logincsrf.headerName]: logincsrf.token
+        },
+        body: JSON.stringify(assertionData)
+    });
+
+    if (!loginResponse.ok) {
+        alert("Passkey-Authentifizierung fehlgeschlagen");
+        return;
+    }
+
+    const result = await loginResponse.json();
+    if (result.authenticated) {
+        console.log(result);            // Erfolgreich authentifiziert; leite weiter (z. B. auf die Startseite)
+        window.location.href = result.redirectUrl || "/";
+    } else {
+        alert("Passkey-Authentifizierung fehlgeschlagen");
+    }
+}
+
+
+function transformAssertion(assertion) {
+    return {
+        id: assertion.id,
+        rawId: bufferToBase64url(assertion.rawId),
+        type: assertion.type,
+        response: {
+            authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+            clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
+            signature: bufferToBase64url(assertion.response.signature),
+            userHandle: assertion.response.userHandle
+                ? bufferToBase64url(assertion.response.userHandle)
+                : null
+        },
+        clientExtensionResults: assertion.getClientExtensionResults
+            ? assertion.getClientExtensionResults()
+            : {}
+    };
+}
+
+function showPasskeyModal() {
+    if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+        var instance = Modal.getOrCreateInstance(document.getElementById('passkey-modal'), {
+            backdrop: 'static',
+            keyboard: false
+        });
+        instance.show();
+        let registerPasskeybtn = document.getElementById('register-passkey');
+        registerPasskeybtn.addEventListener('click', function () {
+            createPasskey();
+        });
+        window.history.replaceState({}, document.title, "/");
+    }
+}
+
+// Has Url Parameter "passkey" and show Modal
+if (window.location.search.includes("pk")) {
+    showPasskeyModal();
+}

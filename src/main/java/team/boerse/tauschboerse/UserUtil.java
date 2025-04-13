@@ -1,11 +1,15 @@
 package team.boerse.tauschboerse;
 
+import java.security.Principal;
+
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import jakarta.servlet.http.Cookie;
 
 public class UserUtil {
+
     /**
      * Konvertiert ein Cookie-Objekt in einen Set-Cookie-Header.
      * Diese Methode wird benötigt, da die Standard-Cookie-Klasse das Setzen von

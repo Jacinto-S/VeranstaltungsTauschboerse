@@ -5,17 +5,16 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tauschbörse</title>
-
-    <script type="module" src="./js/main.js" blocking="render" fetchpriority="high"></script>
-    <link rel="stylesheet" href="./scss/styles.scss">
-    <link rel="stylesheet" href="./css/main.css">
-    <link rel="shortcut icon" href="icon.webp">
+
+    <link rel="shortcut icon" href="/assets/icon-A5eZKrvI.webp">
+  <script type="module" crossorigin src="/assets/index-CXgFwzbe.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DBe_GWWm.css">
 </head>
 
 <body>
     <nav class="navbar sticky-top navbar-expand-sm bg-body-tertiary" style="z-index: 1200;">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#"><img src="icon.webp" alt="Logo" width="30" height="30" class="">
+            <a class="navbar-brand" href="#"><img src="/assets/icon-A5eZKrvI.webp" alt="Logo" width="30" height="30" class="">
                 Tauschbörse</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown"
                 aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
@@ -147,12 +146,14 @@
                         </p>
                         <div class="input-group mb-3" style="max-width: 500px;" id="MailBoxGroup">
                             <form>
-                                <label for="email" class="form-label">Bitte gebe deine Hochschul-E-Mail ein</label>
+                                <label for="email" class="form-label">Registrieren oder einloggen mit
+                                    Hochschul-E-Mail</label>
 
                                 <div class="input-group mb-3">
-                                    <input type="email" class="form-control" id="email"
+                                    <input type="email" class="form-control" id="email" autocomplete="email"
                                         placeholder="email@student.hs-rm.de">
                                     <button id="submitemail" class="btn btn-primary">Absenden</button>
+
                                 </div>
                                 <label for="captcha" class="form-label">Sicherheitsüberprüfung</label>
                                 <altcha-widget id="pow-login" challengeurl="/challenge" auto="onfocus"
@@ -160,7 +161,22 @@
                                     expire="120000" hidelogo></altcha-widget>
 
                             </form>
+
                         </div>
+                        <p>oder Anmelden mit Passkey. Passkeys sind erst <span style="font-weight: bold;">nach</span>
+                            der ersten Anmeldung verfügbar.</p>
+                        <button id="passkey-login-button" class="btn btn-primary">Passkey
+                            verwenden</button>
+
+                        <div style="display: none;" id="betaLoginBox">
+                            <br>
+                            <div class="input-group mb-3" style="max-width: 500px;" id="BetaBoxGroup">
+                                <input type="number" min="1" max="100" id="demoLoginInput" class="form-control"
+                                    placeholder="Accountnummer 1-100">
+                                <button class="btn btn-primary" id="demoLogin">Demo-Beta-Zugang</button>
+                            </div>
+                        </div>
+
                         <div style="display: none;" id="betaLoginBox">
                             <p>Oder nutze den Demo-Beta-Zugang</p>
                             <div class="input-group mb-3" style="max-width: 500px;" id="BetaBoxGroup">
@@ -293,7 +309,7 @@
                         Anmerkung: Die Hochschulseite erlaubt direkte Links leider nicht, daher musst du den Link selbst
                         in die Adresszeile einfügen.
                         <br><br>
-                        <video src="uploadCalendarTutorial.webm" preload="none" controls style="width: 100%;"></video>
+                        <video src="/assets/uploadCalendarTutorial-SSqgBUvs.webm" preload="none" controls style="width: 100%;"></video>
                     </div>
                 </div>
             </div>
@@ -324,7 +340,7 @@
                         <span style="font-weight: bold;">Bitte prüfe ob die Veranstaltungstermine korrekt sind, bevor du
                             ein Angebot erstellst oder akzeptierst.</span>
                         <br><br>
-                        <video src="TerminTauschenTutorial.webm" preload="none" controls style="width: 100%;"></video>
+                        <video src="/assets/TerminTauschenTutorial-BGFo-2g3.webm" preload="none" controls style="width: 100%;"></video>
                     </div>
                 </div>
             </div>
@@ -343,7 +359,7 @@
                         Anmerkung: Die Hochschulseite erlaubt direkte Links leider nicht, daher musst du den Link selbst
                         in die Adresszeile einfügen 😔
                         <br><br>
-                        <video src="GetTerminOverview.webm" preload="none" controls style="width: 100%;"></video>
+                        <video src="/assets/GetTerminOverview-CmEeCEPy.webm" preload="none" controls style="width: 100%;"></video>
                     </div>
                 </div>
             </div>
@@ -472,10 +488,35 @@
                 <button class="btn btn-primary" id="save-private-mail">Löschen</button>
             </div>
             <br>
-            <button class="btn btn-danger" id="clearSessions" style="display: inline;">Alle anderen Sitzungen
-                löschen</button>
+
+
+            <button class="btn btn-success" style="display: none;" id="createPasskey">Passkey erstellen</button>
+
         </div>
 
+    </div>
+    <div class="modal fade" id="passkey-modal" tabindex="-1" aria-labelledby="passkey-modal-label" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 class="modal-title" id="passkey-modal-label">Passkey erstellen</h4>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <img src="/assets/passkey-DToOZJeJ.png" alt="Passkey" class="passkey-image"
+                        style="width: 100%;height: auto;display: block;margin: 0 auto;">
+                    <br>
+                    <p>Mit einem Passkey kannst du dich jetzt schnell und sicher anmelden, ohne jedes Mal eine E-Mail zu
+                        benötigen.</p>
+                    <p>Dein Browser oder Gerät erstellt dafür einen sicheren Schlüssel, den nur du verwenden kannst.</p>
+                    <button class="btn btn-primary" id="register-passkey">Jetzt Passkey erstellen</button>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <hr style="margin-top: 100px;">

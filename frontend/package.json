@@ -6,13 +6,15 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "copyToSpringWin": "npm run build && xcopy /E /I /Y dist\\* ..\\src\\main\\resources\\static\\"
   },
   "devDependencies": {
     "sass": "^1.74.1",
     "vite": "^5.4.2"
   },
   "dependencies": {
+    "@passwordless-id/webauthn": "^2.3.0",
     "@popperjs/core": "^2.11.8",
     "altcha": "^0.6.7",
     "bootstrap": "^5.3.3",

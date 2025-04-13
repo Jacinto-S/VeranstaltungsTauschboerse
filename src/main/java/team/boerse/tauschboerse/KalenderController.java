@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,6 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.micrometer.core.annotation.Timed;
+import io.micrometer.core.aop.TimedAspect;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.prometheus.metrics.core.metrics.Counter;
 import net.fortuna.ical4j.data.CalendarBuilder;
 import net.fortuna.ical4j.data.ParserException;
 import net.fortuna.ical4j.model.DateTime;
@@ -61,7 +66,8 @@ public class KalenderController {
         if (user == null) {
             return;
         }
-        Kalender oldkalender = kalenderRepository.findByUserId(user.getId());
+        List<Kalender> oldkalenderList = kalenderRepository.findAllByUserId(user.getId());
+
         StringReader sin = new StringReader(icsFile);
         CalendarBuilder builder = new CalendarBuilder();
         net.fortuna.ical4j.model.Calendar calendar = builder.build(sin);
@@ -75,8 +81,13 @@ public class KalenderController {
             }
         }
         kalender.setTermine(termine);
-        if (oldkalender != null) {
-            kalenderRepository.delete(oldkalender);
+        if (oldkalenderList != null && oldkalenderList.size() > 0) {
+
+            // remove all oldKalenders
+            for (Kalender old : oldkalenderList) {
+                kalenderRepository.delete(old);
+            }
+
             for (TauschTermin termin : tauschTerminRepository.findTauschTerminByUserid(user.getId())) {
                 tauschTerminRepository.delete(termin);
             }
@@ -92,7 +103,16 @@ public class KalenderController {
         if (user == null) {
             return;
         }
-        Kalender kalender = kalenderRepository.findByUserId(user.getId());
+        List<Kalender> kalenderList = kalenderRepository.findAllByUserId(user.getId());
+
+        if (kalenderList == null || kalenderList.size() == 0) {
+            return;
+        }
+        if (kalenderList.size() > 1) {
+            logger.error("User has more than one calendar, this should not happen!");
+        }
+        Kalender kalender = kalenderList.get(0);
+
         if (kalender == null) {
             return;
         }
@@ -135,14 +155,28 @@ public class KalenderController {
         logger.info(String.format("User %s removed a calendar entry", user.getHsMail()));
     }
 
+    @Timed(value = "getKalender", description = "Get the calendar of the user", histogram = true, percentiles = { 0.95,
+            0.99 })
     @GetMapping(value = "/myKalender", produces = "application/json")
     public ResponseEntity<String> getKalender(@RequestParam(required = false) String terminid)
             throws JsonProcessingException {
+        long processingTime = System.currentTimeMillis();
         User user = UserUtil.getUser();
         if (user == null) {
             return ResponseEntity.badRequest().body("No user found");
         }
-        Kalender kalender = kalenderRepository.findByUserId(user.getId());
+        List<Kalender> kalenderListResult = kalenderRepository.findAllByUserId(user.getId());
+        if (kalenderListResult == null || kalenderListResult.size() > 1) {
+            logger.error("User has more than one calendar, this should not happen!");
+            return ResponseEntity.badRequest().body("No calendar found");
+        }
+
+        if (kalenderListResult.size() == 0) {
+            return ResponseEntity.badRequest().body("No calendar found");
+        }
+
+        Kalender kalender = kalenderListResult.get(0);
+
         if (kalender == null) {
             return ResponseEntity.badRequest().body("No calendar found");
         }
@@ -304,6 +338,10 @@ public class KalenderController {
         ObjectMapper objectMapper = new ObjectMapper();
 
         String json = objectMapper.writeValueAsString(kalenderList);
+        processingTime = System.currentTimeMillis() - processingTime;
+
+        // completed @timed
+
         return ResponseEntity.ok(json);
     }
 
@@ -329,4 +367,8 @@ public class KalenderController {
         return termin;
     }
 
+    @Bean
+    public TimedAspect timedAspect(MeterRegistry registry) {
+        return new TimedAspect(registry);
+    }
 }

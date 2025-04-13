@@ -55,6 +55,9 @@ public class KalenderTermin {
     }
 
     public void setName(String name) {
+        if (name != null && name.indexOf("(SU-") != -1) {
+            name = name.replace("(SU-", "(S-");
+        }
         this.name = name;
     }
 

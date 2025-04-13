@@ -37,6 +37,9 @@ public class TauschTerminController {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private final CounterService counterService = null;
+
     Logger logger = LoggerFactory.getLogger(TauschTerminController.class);
 
     @GetMapping("/removeMyOffers")
@@ -50,6 +53,7 @@ public class TauschTerminController {
             tauschTerminRepository.delete(termin);
         }
         logger.info("User " + user.getHsMail() + " removed all offers");
+        counterService.incrementCounter("removeMyOffers");
         return ResponseEntity.ok().build();
     }
 
@@ -149,6 +153,7 @@ public class TauschTerminController {
 
         MailUtils.sendMail(tauschPartner.getHsMail(), tauschPartner.getPrivateMail(), "Erfolgreiche Terminvermittlung",
                 infosForTauschPartner);
+        counterService.incrementCounter("acceptedOffer");
 
         return ResponseEntity.ok().body(infosForFrontend);
     }
@@ -252,6 +257,9 @@ public class TauschTerminController {
         tauschTerminRepository.saveAll(tauschTermine);
         tauschTerminRepository.saveAll(tauschTermineTauschpartner);
         tauschTerminRepository.deleteAll(tauschTermineToDelete);
+        if (!tauschTermineToDelete.isEmpty()) {
+            logger.info("Deleted overlapping Tauschtermine");
+        }
 
     }
 
@@ -358,6 +366,7 @@ public class TauschTerminController {
             }
         }
         if (count >= 5) {
+            logger.info("User " + user.getHsMail() + " tried to create more than 5 offers");
             return ResponseEntity.status(403).body("You can only have 5 offers at the same time");
         }
 
@@ -370,6 +379,7 @@ public class TauschTerminController {
         TauschTermin tauschTermin = new TauschTermin(user.getId(), terminangebot, gesucht);
         logger.info("User " + user.getHsMail() + " created an offer for " + terminangebot.getName());
         tauschTerminRepository.save(tauschTermin);
+        counterService.incrementCounter("createdOffer");
         return ResponseEntity.ok().build();
     }
 
