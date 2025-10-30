@@ -2,23 +2,34 @@ import sanitizeHtml from 'sanitize-html';
 import 'altcha';
 
 
-function isDev() {
-    return window.location.href.includes("localhost") || window.location.href.includes("http://");
-}
-
-
-
 var aorurl = document.getElementById('aorurl');
 var aorurl2 = document.getElementById('aorurl2');
 var aorurl3 = document.getElementById('aorurl3');
 var powverified = false;
 var powpayload = "";
 
-// select text of aorurl
+const passkeyManager = document.getElementById('passkeyManager');
+const passkeyList = document.getElementById('passkeyList');
+const passkeyEmptyState = document.getElementById('passkeyEmptyState');
+const passkeyLabelInput = document.getElementById('passkey-label-input');
+const passkeyManageModalEl = document.getElementById('passkey-manage-modal');
+const manageAddPasskeyBtn = document.getElementById('manage-add-passkey');
+const MAX_PASSKEY_LABEL_LENGTH = 120;
+let isLoadingPasskeys = false;
+
+let studiengangSelect = document.getElementById('studiengangSelect');
+let saveStudiengangBtn = document.getElementById('saveStudiengangBtn');
+let studiengangSettingsSelect = document.getElementById('studiengangSettingsSelect');
+let saveStudiengangSettingsBtn = document.getElementById('saveStudiengangSettings');
+let sgSettingsBox = document.getElementById('sgSettings');
+
+let cachedStudiengang = null;
+let cachedStudiengaengeListe = null;
+let studiengaengeListPromise = null; // Promise-Cache für Race Condition Prevention
+
 function copy(event) {
     event.preventDefault();
     var range = document.createRange();
-    range.selectNode(event.target);
     window.getSelection().removeAllRanges();
     window.getSelection().addRange(range);
     document.execCommand('copy');
@@ -30,15 +41,10 @@ aorurl2.addEventListener('click', copy);
 aorurl3.addEventListener('click', copy);
 
 
-
-
-
-// if file is dropped over the uploadHint, drop it into the fileupload input
 var uploadHint = document.getElementById('uploadHint');
 var myKalendar = document.getElementById('weekCalendar');
 var file = document.getElementById('fileupload');
 
-// make the uploadHint to a dropzone
 myKalendar.addEventListener('dragover', function (event) {
     uploadHint.style.border = "2px dashed black";
     uploadHint.style.filter = "brightness(1.5)";
@@ -73,18 +79,6 @@ myKalendar.addEventListener('drop', function (event) {
 });
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 // Share Features
 function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(function () {
@@ -109,6 +103,7 @@ function sharePage() {
         copyToClipboard(url);
     }
 }
+
 document.getElementById('copylink').addEventListener('click', function () {
     copyToClipboard(window.location.href);
 });
@@ -116,24 +111,24 @@ document.getElementById('sharebtn').addEventListener('click', function () {
     sharePage();
 });
 
-// Account Management
 var email = document.getElementById('email');
 var submitemail = document.getElementById('submitemail');
 var state = 0;
 var offer = null;
 var gesucht = [];
 
+if (email) {
+    email.addEventListener('focus', function () {
+        ensureConditionalPasskeyAutofill().catch(error => {
+            console.error('Fehler beim Starten der Passkey-Autofill-Anfrage:', error);
+        });
+    });
+}
+
 var urlparams = new URLSearchParams(window.location.search);
 var logintoken = urlparams.get('otttoken');
 if (logintoken != null) {
-    var url = "";
-    if (isDev()) {
-        url = "http://" + window.location.hostname + ":8085/login/ott";
-    } else {
-        url = "/login/ott";
-    }
-
-    fetch(url, {
+    fetch("/login/ott", {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -149,6 +144,8 @@ if (logintoken != null) {
             localStorage.removeItem('uploadLocalCalendar');
         }
         if (response.status == 201 || response.status == 200) {
+            // Nach erfolgreichem Login Kennzeichen setzen, damit SG-Abfrage direkt danach erfolgen kann
+            localStorage.setItem('justLoggedIn', 'true');
             localStorage.setItem('loggedIn', "true");
             isLoggedIn = true;
             window.history.replaceState({}, document.title, "/");
@@ -200,6 +197,9 @@ function requestLoginMail(notifyUser = true, toemail = email.value) {
 
     var textfrom = submitemail.innerText;
 
+    if (email) {
+        email.blur();
+    }
 
     var firstpart = email.value.split("@")[0];
     if (!powverified) {
@@ -208,17 +208,11 @@ function requestLoginMail(notifyUser = true, toemail = email.value) {
     }
 
     if (firstpart.includes(".")) {
-        var url = "";
-        if (isDev()) {
-            url = "http://" + window.location.hostname + ":8085/ott/generate";
-        } else {
-            url = "/ott/generate";
-        }
-
-
         if (notifyUser) {
             submitemail.innerHTML = "<span class='spinner-border spinner-border-sm' role='status' aria-hidden='true'></span>";
             submitemail.disabled = true;
+            showMessage("Login-Mail wird versendet", "Die Anmeldemail wird gerade versendet. Dies kann einen Moment dauern...");
+
             setTimeout(function () {
                 submitemail.disabled = false;
             }, 30000);
@@ -229,8 +223,7 @@ function requestLoginMail(notifyUser = true, toemail = email.value) {
         return;
     }
 
-    // Form data required for the request. Send hsMail as username and pow as pow
-    fetch(url, {
+    fetch("/ott/generate", {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -246,7 +239,7 @@ function requestLoginMail(notifyUser = true, toemail = email.value) {
                 setTimeout(function () {
                     showMessage("Anmeldelink erfolgreich angefordert", "Bitte bestätige deine Anmeldung mit dem Link in der E-Mail. <a href='https://webmail.hs-rm.de/owa/#path=/mail/inbox'>HSRM E-Mail Client öffnen</a>");
                     submitemail.innerText = textfrom;
-                }, 2500);
+                }, 4000);
             }
 
         } else {
@@ -280,13 +273,7 @@ function requestLoginMail(notifyUser = true, toemail = email.value) {
 function showFeedback() {
     var ratings = document.getElementById('ratings');
     var feedbackSend = document.getElementById('feedbackSend');
-    var url = "";
-    if (isDev()) {
-        url = "http://" + window.location.hostname + ":8085/randomFeedback";
-    } else {
-        url = "/randomFeedback";
-    }
-    fetch(url + "?count=3", {
+    fetch("/randomFeedback?count=3", {
         method: 'GET',
         credentials: 'include'
     }).then(response => response.json()).then(data => {
@@ -339,13 +326,7 @@ feedbackSend.addEventListener('click', function () {
         isPublic = isPublic == false;
     }
 
-    var url = "";
-    if (isDev()) {
-        url = "http://" + window.location.hostname + ":8085/feedback";
-    } else {
-        url = "/feedback";
-    }
-    fetch(url, {
+    fetch("/feedback", {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -374,13 +355,7 @@ import * as ical from 'ical';
 var removeAllOvers = document.getElementById('removeAllOvers');
 
 removeAllOvers.addEventListener('click', function () {
-    var url = "";
-    if (isDev()) {
-        url = "http://" + window.location.hostname + ":8085/removeMyOffers";
-    } else {
-        url = "/removeMyOffers";
-    }
-    fetch(url, {
+    fetch("/removeMyOffers", {
         method: 'GET',
         credentials: 'include'
     }).then(response => {
@@ -414,48 +389,444 @@ function showMessage(title, message) {
 
 
 
+function clearPasskeyList() {
+    if (passkeyList) {
+        passkeyList.innerHTML = "";
+    }
+    if (passkeyEmptyState) {
+        passkeyEmptyState.style.display = "";
+        passkeyEmptyState.textContent = "Du hast noch keinen Passkey erstellt.";
+    }
+}
 
-function showUploadedCalendar() {
+function hidePasskeyManager() {
+    if (passkeyManager) {
+        passkeyManager.style.display = "none";
+    }
+    clearPasskeyList();
+}
+
+function showPasskeyManager(forceReload = false) {
+    if (!passkeyManager) {
+        return;
+    }
+    passkeyManager.style.display = "block";
+    loadPasskeys(forceReload);
+}
+
+function formatPasskeyDate(value) {
+    if (!value) {
+        return "-";
+    }
+    try {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+            return "-";
+        }
+        return date.toLocaleString('de-DE', {
+            dateStyle: 'medium',
+            timeStyle: 'short'
+        });
+    } catch (error) {
+        console.debug('Konnte Passkey-Datum nicht formatieren', error);
+        return "-";
+    }
+}
+
+function humanizeTransports(transports) {
+    if (!Array.isArray(transports) || transports.length === 0) {
+        return "";
+    }
+    return transports.map((transport) => {
+        switch (transport) {
+            case 'INTERNAL':
+                return 'Gerät';
+            case 'USB':
+                return 'USB';
+            case 'NFC':
+                return 'NFC';
+            case 'BLE':
+                return 'Bluetooth';
+            default:
+                return transport;
+        }
+    }).join(', ');
+}
+
+function renderPasskeys(passkeys) {
+    // In der aktuellen UI wird die Liste im Modal angezeigt, ein separater passkeyManager-Container ist nicht erforderlich
+    if (!passkeyList || !passkeyEmptyState) {
+        return;
+    }
+
+    passkeyList.innerHTML = "";
+
+    if (!Array.isArray(passkeys) || passkeys.length === 0) {
+        passkeyEmptyState.style.display = "";
+        passkeyEmptyState.textContent = "Du hast noch keinen Passkey erstellt.";
+        return;
+    }
+
+    passkeyEmptyState.style.display = "none";
+
+    passkeys.forEach((passkey) => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item passkey-entry';
+        item.dataset.credentialId = passkey.credentialId;
+        item.dataset.currentLabel = passkey.label ? passkey.label.trim() : "";
+
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'd-flex flex-column flex-md-row gap-3 align-items-md-start';
+
+        const infoColumn = document.createElement('div');
+        infoColumn.className = 'flex-grow-1';
+
+        const labelGroup = document.createElement('div');
+        labelGroup.className = 'input-group input-group-sm mb-2';
+
+        const labelInput = document.createElement('input');
+        labelInput.type = 'text';
+        labelInput.maxLength = MAX_PASSKEY_LABEL_LENGTH;
+        labelInput.className = 'form-control';
+        labelInput.placeholder = 'Passkey benennen';
+        labelInput.value = passkey.label || "";
+        labelInput.dataset.role = 'label-input';
+
+        const saveLabelButton = document.createElement('button');
+        saveLabelButton.className = 'btn btn-outline-primary';
+        saveLabelButton.textContent = 'Speichern';
+        saveLabelButton.dataset.action = 'save-label';
+        saveLabelButton.disabled = true;
+
+        labelGroup.appendChild(labelInput);
+        labelGroup.appendChild(saveLabelButton);
+
+        infoColumn.appendChild(labelGroup);
+
+        const metadata = document.createElement('div');
+        metadata.className = 'small text-secondary';
+        metadata.textContent = `Erstellt: ${formatPasskeyDate(passkey.created)} • Zuletzt genutzt: ${formatPasskeyDate(passkey.lastUsed)}`;
+
+        const transportInfo = humanizeTransports(passkey.transports);
+        if (transportInfo) {
+            const transportLine = document.createElement('div');
+            transportLine.className = 'small text-secondary';
+            transportLine.textContent = `Authentifikator: ${transportInfo}`;
+            infoColumn.appendChild(transportLine);
+        }
+
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'btn btn-outline-danger btn-sm ms-md-auto';
+        deleteButton.textContent = 'Löschen';
+        deleteButton.dataset.action = 'delete-passkey';
+
+        infoColumn.appendChild(metadata);
+
+        contentWrapper.appendChild(infoColumn);
+        contentWrapper.appendChild(deleteButton);
+
+        item.appendChild(contentWrapper);
+        passkeyList.appendChild(item);
+    });
+}
+
+async function loadPasskeys(force = false) {
+    if (!passkeyList) {
+        return false;
+    }
+    if (localStorage.getItem('loggedIn') !== 'true') {
+        hidePasskeyManager();
+        return false;
+    }
+    if (isLoadingPasskeys) {
+        return false;
+    }
+
+    isLoadingPasskeys = true;
+    if (passkeyEmptyState) {
+        passkeyEmptyState.style.display = "";
+        passkeyEmptyState.textContent = "Passkeys werden geladen...";
+    }
+
+    let success = false;
+    try {
+        const response = await fetch("/webauthn/credentials", {
+            method: 'GET',
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            throw new Error('Fehler beim Laden der Passkeys');
+        }
+
+        const data = await response.json();
+        renderPasskeys(Array.isArray(data) ? data : []);
+        success = true;
+    } catch (error) {
+        console.error('Fehler beim Laden der Passkeys:', error);
+        clearPasskeyList();
+        if (passkeyEmptyState) {
+            passkeyEmptyState.textContent = "Passkeys konnten nicht geladen werden.";
+        }
+    } finally {
+        isLoadingPasskeys = false;
+    }
+
+    return success;
+}
+if (managePasskeysBtn) {
+    managePasskeysBtn.addEventListener('click', async function () {
+        const originalHtml = managePasskeysBtn.innerHTML;
+        managePasskeysBtn.innerHTML = "<span class='spinner-border spinner-border-sm' role='status' aria-hidden='true'></span>";
+        managePasskeysBtn.disabled = true;
+
+        try {
+            const ok = await loadPasskeys();
+            if (!ok) {
+                showMessage('Fehler', 'Passkeys konnten nicht geladen werden. Bitte versuche es erneut.');
+                return;
+            }
+            const modal = Modal.getOrCreateInstance(document.getElementById('passkey-manage-modal'));
+            modal.show();
+        } finally {
+            managePasskeysBtn.disabled = false;
+            managePasskeysBtn.innerHTML = originalHtml;
+        }
+    });
+}
+
+
+document.addEventListener('show.bs.modal', function (e) {
+    const openModals = document.querySelectorAll('.modal.show').length;
+    const zIndex = 1250 + (10 * openModals);
+    e.target.style.zIndex = zIndex + 5;
+    setTimeout(() => {
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        if (backdrops.length > 0) {
+            backdrops[backdrops.length - 1].style.zIndex = String(zIndex + 4);
+        }
+    }, 0);
+});
+
+document.addEventListener('hidden.bs.modal', function () {
+    if (document.querySelectorAll('.modal.show').length > 0) {
+        document.body.classList.add('modal-open');
+    }
+});
+
+if (manageAddPasskeyBtn) {
+    manageAddPasskeyBtn.addEventListener('click', function () {
+        showPasskeyModal();
+    });
+}
+
+async function deletePasskey(credentialId) {
+    const csrf = await getCsrfToken();
+    const response = await fetch("/webauthn/credentials/" + encodeURIComponent(credentialId), {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+            [csrf.headerName]: csrf.token
+        }
+    });
+
+    if (!response.ok && response.status !== 204) {
+        throw new Error('Fehler beim Löschen des Passkeys');
+    }
+}
+
+async function updatePasskeyLabel(credentialId, label) {
+    const csrf = await getCsrfToken();
+    const normalized = label && label.trim().length > 0 ? label.trim() : null;
+
+    const response = await fetch("/webauthn/credentials/" + encodeURIComponent(credentialId), {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            [csrf.headerName]: csrf.token
+        },
+        body: JSON.stringify({
+            label: normalized
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error('Fehler beim Speichern der Passkey-Bezeichnung');
+    }
+
+    return response.json();
+}
+
+if (passkeyList) {
+    passkeyList.addEventListener('click', async function (event) {
+        const actionButton = event.target.closest('button[data-action]');
+        if (!actionButton) {
+            return;
+        }
+
+        const row = actionButton.closest('.passkey-entry');
+        if (!row) {
+            return;
+        }
+
+        const credentialId = row.dataset.credentialId;
+        if (!credentialId) {
+            return;
+        }
+
+        if (actionButton.dataset.action === 'delete-passkey') {
+            const confirmed = window.confirm('Möchtest du diesen Passkey wirklich löschen?');
+            if (!confirmed) {
+                return;
+            }
+            try {
+                await deletePasskey(credentialId);
+                showMessage('Passkey entfernt', 'Der Passkey wurde erfolgreich gelöscht.');
+                await loadPasskeys();
+            } catch (error) {
+                console.error('Fehler beim Löschen des Passkeys:', error);
+                showMessage('Fehler', 'Passkey konnte nicht gelöscht werden. Bitte versuche es erneut.');
+            }
+            return;
+        }
+
+        if (actionButton.dataset.action === 'save-label') {
+            const input = row.querySelector('[data-role="label-input"]');
+            if (!input) {
+                return;
+            }
+            const trimmedValue = input.value.trim();
+            const previousValue = row.dataset.currentLabel || "";
+
+            if (trimmedValue === previousValue) {
+                showMessage('Keine Änderungen', 'Die neue Bezeichnung entspricht der bisherigen.');
+                actionButton.disabled = true;
+                return;
+            }
+
+            if (trimmedValue.length > MAX_PASSKEY_LABEL_LENGTH) {
+                showMessage('Eingabe zu lang', 'Die Bezeichnung darf maximal ' + MAX_PASSKEY_LABEL_LENGTH + ' Zeichen enthalten.');
+                return;
+            }
+
+            try {
+                await updatePasskeyLabel(credentialId, trimmedValue);
+                showMessage('Passkey aktualisiert', 'Die Bezeichnung wurde gespeichert.');
+                await loadPasskeys();
+            } catch (error) {
+                console.error('Fehler beim Aktualisieren der Passkey-Bezeichnung:', error);
+                showMessage('Fehler', 'Die Bezeichnung konnte nicht gespeichert werden.');
+            }
+        }
+    });
+
+    passkeyList.addEventListener('input', function (event) {
+        if (!event.target || event.target.dataset.role !== 'label-input') {
+            return;
+        }
+        const row = event.target.closest('.passkey-entry');
+        if (!row) {
+            return;
+        }
+        const saveButton = row.querySelector('[data-action="save-label"]');
+        if (!saveButton) {
+            return;
+        }
+        const trimmedValue = event.target.value.trim();
+        const previousValue = row.dataset.currentLabel || "";
+        saveButton.disabled = trimmedValue === previousValue;
+    });
+
+    passkeyList.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || event.shiftKey) {
+            return;
+        }
+        if (!event.target || event.target.dataset.role !== 'label-input') {
+            return;
+        }
+        event.preventDefault();
+        const row = event.target.closest('.passkey-entry');
+        if (!row) {
+            return;
+        }
+        const saveButton = row.querySelector('[data-action="save-label"]');
+        if (saveButton && !saveButton.disabled) {
+            saveButton.click();
+        }
+    });
+}
+
+async function showUploadedCalendar() {
 
     var filedata = file.files[0];
-    if (filedata.name.split('.').pop() != "ics") {
-        alert("Bitte laden Sie eine .ics-Datei hoch");
+    if (!filedata) {
+        return;
+    }
+    const ext = (filedata.name.split('.').pop() || '').toLowerCase();
+    if (ext !== "ics") {
+        alert("Bitte lade eine .ics-Kalenderdatei hoch (kein PDF).");
+        // Input zurücksetzen, damit derselbe falsche Upload nicht hängen bleibt
+        try { file.value = ""; } catch { }
         return;
     }
 
     var reader = new FileReader();
-    reader.onload = function (e) {
+    reader.onload = async function (e) {
         var data = e.target.result;
-        var url = "";
-        if (isDev()) {
-            url = "http://" + window.location.hostname + ":8085/uploadKalender";
-        } else {
-            url = "/uploadKalender";
+        const trimmed = (data || "").replace(/^\uFEFF?/, '').trimStart();
+        const looksLikePdf = trimmed.startsWith('%PDF');
+        const beginsVCal = /^BEGIN:VCALENDAR/i.test(trimmed);
+        if (looksLikePdf || !beginsVCal) {
+            alert("Die gewählte Datei ist keine gültige iCalendar (.ics) Datei. Bitte exportiere die .ics aus AOR und lade diese hoch.");
+            try { file.value = ""; } catch { }
+            return;
+        }
+
+        let parsed;
+        try {
+            parsed = ical.parseICS(data);
+        } catch (err) {
+            alert("Die Datei konnte nicht gelesen werden. Bitte prüfe, ob es eine gültige .ics-Datei ist.");
+            try { file.value = ""; } catch { }
+            return;
         }
         if (localStorage.getItem('loggedIn') !== 'true') {
             localStorage.setItem('tempCalendar', data);
-            showIcalCalendar(ical.parseICS(data));
+            showIcalCalendar(parsed);
 
             return;
         }
 
-        fetch(url, {
+        try {
+            const currentSg = await getMyStudiengang();
+            if (!currentSg || !currentSg.id) {
+                localStorage.setItem('tempCalendar', data);
+                localStorage.setItem('uploadAfterStudiengang', 'true');
+                try { await checkAndPromptStudiengang(); } catch { }
+                showIcalCalendar(parsed);
+                return;
+            }
+        } catch (e) {
+            console.debug('Studiengang-Check vor Upload fehlgeschlagen', e);
+        }
+
+        fetch("/uploadKalender", {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'text/plain;charset=UTF-8'
             },
             body: data,
             credentials: 'include'
         }).then(response => {
             if (response.ok) {
-                alert("Kalender erfolgreich hochgeladen");
+                showMessage('Erfolg', 'Kalender erfolgreich hochgeladen');
                 getMyCalendar();
             } else {
-                alert("Fehler beim Hochladen des Kalenders");
+                showMessage('Fehler', 'Fehler beim Hochladen: Bitte lade eine gültige .ics-Datei hoch.');
             }
         });
 
-        var parsed = ical.parseICS(data);
         showIcalCalendar(parsed);
     };
     reader.readAsText(filedata);
@@ -476,14 +847,7 @@ document.getElementById("confirmOffer").addEventListener('click', function () {
         "gesucht": gesucht
     };
     console.log(angebot);
-    var offerUrl = "";
-    if (isDev()) {
-        offerUrl = "http://" + window.location.hostname + ":8085/createOffer";
-    } else {
-        offerUrl = "/createOffer";
-    }
-
-    fetch(offerUrl, {
+    fetch("/createOffer", {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -495,8 +859,9 @@ document.getElementById("confirmOffer").addEventListener('click', function () {
 
 
             var angebotErstelltModal = Modal.getOrCreateInstance(document.getElementById('angebotErstelltModal'));
-            state = 1;
+            state = 0;
             gesucht = [];
+            offer = null;
             getMyCalendar();
             angebotErstelltModal.show();
 
@@ -512,30 +877,13 @@ document.getElementById("confirmOffer").addEventListener('click', function () {
 });
 
 
-function debounce(func, wait) {
-    let timeout;
-    return function (...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(this, args), wait);
-    };
-}
-
-
 function getMyCalendar() {
-    var url = "";
-    if (isDev()) {
-        url = "http://" + window.location.hostname + ":8085/myKalender";
-    } else {
-        url = "/myKalender";
-    }
-
     var stateInfo = document.getElementById('stateInfo');
+    let url = "/myKalender";
     if (state == 0) {
         stateInfo.style.visibility = "visible";
         stateInfo.innerText = "Wähle einen Termin, um ein Tauschangebot zu Erstellen oder wähle ein Angebot aus.";
     }
-
-
 
     if (state == 1) {
         url += "?title=" + (offer.title.split("(")[0].trim()) + "&terminid=" + offer.offerid;
@@ -549,10 +897,30 @@ function getMyCalendar() {
     }).then(response => {
         if (response.ok) {
             return response.json().then(data => {
-                showCalendar(data);
+                if (data.calendar) {
+                    showCalendar(data.calendar, data);
+                } else {
+                    showCalendar(data);
+                }
                 localStorage.removeItem('uploadLocalCalendarIfNotExist');
+                // SG-Abfrage nur direkt nach Login (nicht bei bereits eingeloggten Nutzern ohne Upload)
+                if (localStorage.getItem('loggedIn') === 'true' && localStorage.getItem('justLoggedIn') === 'true') {
+                    setTimeout(async () => {
+                        try {
+                            await checkAndPromptStudiengang();
+                        } catch (e) {
+                            console.debug('SG prompt after login failed', e);
+                        } finally {
+                            localStorage.removeItem('justLoggedIn');
+                        }
+                    }, 0);
+                }
             });
         } else {
+            if (document.getElementById('uploadHint') != null) {
+                document.getElementById('uploadHint').style.display = "block";
+            }
+
             if (localStorage.getItem('uploadLocalCalendarIfNotExist') === 'true') {
                 localStorage.removeItem('uploadLocalCalendarIfNotExist');
                 if (localStorage.getItem('tempCalendar') != null) {
@@ -578,8 +946,6 @@ function showIcalCalendar(parsed) {
     let items = [
         [], [], [], [], []
     ];
-
-
 
     for (let element in parsed) {
         if (parsed.hasOwnProperty(element)) {
@@ -617,6 +983,9 @@ function showIcalCalendar(parsed) {
                     case "SU":
                         event.color = '#556B2F';
                         break;
+                    case "T":
+                        event.color = '#bbbbbbff';
+                        break;
                     default:
                         event.color = 'grey';
                 }
@@ -635,29 +1004,85 @@ function showIcalCalendar(parsed) {
 }
 var lastclicked = -1;
 
-function showCalendar(items) {
+function updateSystemModeInfo(systemData) {
+    const infoBox = document.getElementById('system-mode-info');
+    if (!infoBox) return;
+
+    if (!systemData || systemData.systemMode !== 'POOLED_3CYCLE') {
+        infoBox.style.display = 'none';
+        return;
+    }
+
+    infoBox.style.display = 'block';
+
+    let scheduleText = '';
+    if (systemData.scheduleType === 'INTERVAL_HOURS' && systemData.intervalHours) {
+        scheduleText = `alle ${systemData.intervalHours} Stunden`;
+    } else if (systemData.scheduleType === 'DAILY_FIXED' && systemData.dailyTime) {
+        scheduleText = `täglich um ${systemData.dailyTime} Uhr`;
+    } else {
+        scheduleText = 'nach Zeitplan';
+    }
+
+    let nextRunText = '';
+    if (systemData.nextRunAt) {
+        const nextRun = new Date(systemData.nextRunAt);
+        nextRunText = `<br><strong>Nächste Ziehung:</strong> ${nextRun.toLocaleString('de-DE')}`;
+    }
+
+    const infoText = document.getElementById('system-mode-info-text');
+    if (infoText) {
+        infoText.innerHTML = `
+            <strong>3er-Zirkeltausch aktiv</strong><br>
+            Angebote werden nicht mehr live angezeigt. Das System sammelt Wünsche und vermittelt ${scheduleText}.${nextRunText}<br>
+            Bei der Vermittlung werden optimale 2er- und 3er-Tauschzyklen gebildet. 
+            Du wirst per E-Mail benachrichtigt, wenn ein Tausch für dich gefunden wurde.
+        `;
+    }
+}
+
+function showCalendar(items, systemData) {
     var dayNames = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
     const days = [{ 'Montag': [] }, { 'Dienstag': [] }, { 'Mittwoch': [] }, { 'Donnerstag': [] }, { 'Freitag': [] }];
     const startHour = 8;  // 8:00 Uhr
     const endHour = 21.2;   // 21:00 Uhr
-
-
+    updateSystemModeInfo(systemData);
 
     const calendarEl = document.getElementById('weekCalendar');
     calendarEl.innerHTML = '';
     function timeToPosition(time) {
         const [hours, minutes] = time.split(':').map(Number);
         const totalHours = (hours - startHour) + (minutes / 60);
-        // add percentage to hide header
-        // day height is 100% - 25px (header height)
         var dayHeight = 650;
         var percent = 25 * 100 / dayHeight;
         var perc = ((1 - (totalHours / (endHour - startHour)) * 1) * percent);
         return ((totalHours / (endHour - startHour)) * 100) + perc;
     }
 
+    function baseTitleOf(title) {
+        try {
+            return (title || '').split('(')[0].trim();
+        } catch { return title || ''; }
+    }
+    function groupFromTitle(title) {
+        try {
+            const m = title.match(/\(([^)]+)\)/);
+            if (!m) return null;
+            const inside = m[1];
+            const parts = inside.split('-');
+            if (parts.length > 1 && parts[1] && parts[1].trim() !== '?') {
+                return parts[1].trim();
+            }
+        } catch { }
+        return null;
+    }
+    function displayTitleWithGroup(title) {
+        const base = baseTitleOf(title);
+        const g = groupFromTitle(title);
+        return g ? `${base} (${g})` : base;
+    }
 
-    // Zeitskala hinzufügen
+
     const timeScaleEl = document.createElement('div');
     timeScaleEl.classList.add('time-scale');
     for (let hour = startHour; hour <= endHour; hour++) {
@@ -682,13 +1107,28 @@ function showCalendar(items) {
         var samestart = 0;
         var currentstart = 0;
         var lastEnd = new Date(0, 0, 0, 0, 0);
+        const renderedPlaceholders = new Set();
         const currentDay = (count);
         items[count].sort((a, b) => {
             return a.start.localeCompare(b.start);
         });
 
+        const angefragtSlots = new Set();
+        (items[count] || []).forEach((it) => {
+            if (it && typeof it.subtext === 'string' && it.subtext.indexOf('ANGEFRAGT') !== -1) {
+                angefragtSlots.add(it.start + '|' + it.end);
+            }
+        });
+
         (items[count] || []).forEach((item, index) => {
             const offerId = item.offerid;
+            if (item.subtext.indexOf("OFFER") != -1) {
+                const slotKey = item.start + '|' + item.end;
+                if (angefragtSlots.has(slotKey)) {
+                    return; // Nicht rendern, nicht DOM anfassen, nicht samestart verändern
+                }
+            }
+
             const itemEl = document.createElement('div');
             itemEl.classList.add('item');
             itemEl.style.backgroundColor = item.color;
@@ -710,17 +1150,25 @@ function showCalendar(items) {
 
             let isAllowed = diff == 90;
             let isUnderOther = false;
-            if (start.getTime() < lastEnd.getTime()) {
-                isAllowed = false;
-                isUnderOther = true;
-            } else {
-                lastEnd = end;
+
+            // Platzhalter (graue Auswahlkarten) identifizieren
+            const isPlaceholder = (item.color === 'rgba(227, 227, 227, 0.4)');
+            // Overlay-Elemente (OFFER/ANGEFRAGT) und Platzhalter sollen die Overlap-Logik nicht beeinflussen
+            const isOverlay = (item.subtext && item.subtext.length > 0);
+            if (!isOverlay && !isPlaceholder) {
+                if (start.getTime() < lastEnd.getTime()) {
+                    isAllowed = false;
+                    isUnderOther = true;
+                } else {
+                    lastEnd = end;
+                }
             }
 
             if (item.subtext.indexOf("OFFER") != -1) {
-                itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title)}</strong><hr class="title-line"><div class="badge text-bg-danger"  style="opacity:1!important;background-color::black!important;transform:brightness(0.8)">${sanitizeHtml(item.subtext)}</div>`;
+                const shown = displayTitleWithGroup(item.title);
+                itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(shown)}</strong><hr class="title-line"><div class="badge text-bg-danger smallbadge">${sanitizeHtml(item.subtext)}</div>`;
 
-            } else if (item.subtext == "" && (item.title.indexOf("(P-") != -1 || item.title.indexOf("(Ü-") != -1 || item.title.indexOf("(S-") != -1 || item.title.indexOf("(SU-") != -1) && item.title.match(/\(([^)]+)\)/)[1].split("-")[1] != undefined) {
+            } else if (item.subtext == "" && (item.title.indexOf("(P-") != -1 || item.title.indexOf("(Ü-") != -1 || item.title.indexOf("(S-") != -1 || item.title.indexOf("(SU-") != -1 || item.title.indexOf("(T-") != -1) && item.title.match(/\(([^)]+)\)/)[1].split("-")[1] != undefined) {
                 try {
                     var praktikumtype = item.title.match(/\(([^)]+)\)/)[1].split("-")[1];
                     itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title.split(" ")[0])}</strong><hr class="title-line"><p style="text-align: center;font-size: 28px;opacity: 0.7;color:#808080">${praktikumtype}</p>`;
@@ -731,7 +1179,18 @@ function showCalendar(items) {
 
 
             } else {
-                itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title.split(" ")[0])}</strong><hr class="title-line"><div class="badge text-bg-secondary smallbadge">${sanitizeHtml(item.subtext)}</div>`;
+                if (item.subtext && item.subtext.indexOf('ANGEFRAGT') !== -1) {
+                    const shown = displayTitleWithGroup(item.title);
+                    itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(shown)}</strong><hr class="title-line"><div class="badge text-bg-secondary smallbadge">${sanitizeHtml(item.subtext)}</div>`;
+                }
+                else if (item.subtext && item.subtext.indexOf('VORSCHLAG') !== -1) {
+                    const shown = displayTitleWithGroup(item.title);
+                    itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(shown)}</strong><hr class="title-line"><div class="badge text-bg-secondary smallbadge">VORSCHLAG</div>`;
+                    itemEl.addEventListener('mouseenter', function () { itemEl.style.outline = '2px dashed rgba(0,0,0,0.25)'; });
+                    itemEl.addEventListener('mouseleave', function () { itemEl.style.outline = (lastclicked == offerId ? '3px solid #FB6D48' : ''); });
+                } else {
+                    itemEl.innerHTML = `<strong class="item-title">${sanitizeHtml(item.title.split(" ")[0])}</strong><hr class="title-line"><div class="badge text-bg-secondary smallbadge">${sanitizeHtml(item.subtext)}</div>`;
+                }
             }
 
 
@@ -755,74 +1214,75 @@ function showCalendar(items) {
 
 
 
+            let isVorlesung = false;
             try {
                 var eventtype = item.title.match(/\(([^)]+)\)/)[1].split("-")[0];
-                if (eventtype == "V" || item.subtext.indexOf("ANGEFRAGT") != -1 || !isAllowed) {
-                    itemEl.style.cursor = "not-allowed";
-                    if (loggedIn) {
-                        var deletebtn = document.createElement('button');
-                        deletebtn.style.position = "absolute";
-                        deletebtn.style.right = "2px";
-                        deletebtn.innerText = "X";
-                        deletebtn.style.width = "18px";
-                        deletebtn.style.height = "18px";
-                        deletebtn.style.top = "2px";
-                        deletebtn.style.borderRadius = "25%";
-                        deletebtn.setAttribute('offerid', offerId);
-                        deletebtn.style.backgroundColor = "rgb(255, 0, 0)";
-                        deletebtn.style.fontSize = "10px";
-                        deletebtn.title = "Termin löschen";
-                        deletebtn.style.border = "none";
+                isVorlesung = (eventtype == "V");
+            } catch (error) { }
+            if (isVorlesung || item.subtext.indexOf("ANGEFRAGT") != -1 || !isAllowed) {
+                itemEl.style.cursor = "not-allowed";
+                if (loggedIn) {
+                    var deletebtn = document.createElement('button');
+                    deletebtn.style.position = "absolute";
+                    deletebtn.style.right = "2px";
+                    deletebtn.innerText = "X";
+                    deletebtn.style.width = "18px";
+                    deletebtn.style.height = "18px";
+                    deletebtn.style.top = "2px";
+                    deletebtn.style.borderRadius = "25%";
+                    deletebtn.setAttribute('offerid', offerId);
+                    deletebtn.style.backgroundColor = "rgb(255, 0, 0)";
+                    deletebtn.style.fontSize = "10px";
+                    deletebtn.title = "Termin löschen";
+                    deletebtn.style.border = "none";
 
-                        deletebtn.addEventListener('click', function () {
-                            var id = deletebtn.getAttribute('offerid');
+                    deletebtn.addEventListener('click', function () {
+                        var id = deletebtn.getAttribute('offerid');
 
-                            if (!confirm("Willst du den Termin wirklich löschen?")) {
-                                return;
-                            }
-                            var url = "";
-                            if (isDev()) {
-                                url = "http://" + window.location.hostname + ":8085/removeTermin?terminid=" + id;
+                        if (!confirm("Willst du den Termin wirklich löschen?")) {
+                            return;
+                        }
+                        fetch("/removeTermin?terminid=" + id, {
+                            method: 'GET',
+                            credentials: 'include'
+                        }).then(response => {
+                            if (response.ok) {
+                                getMyCalendar();
+                                showMessage("Termin gelöscht", "Der Termin wurde erfolgreich gelöscht.", "success");
                             } else {
-                                url = "/removeTermin?terminid=" + id;
+                                alert("Fehler beim Löschen des Termins");
                             }
-                            fetch(url, {
-                                method: 'GET',
-                                credentials: 'include'
-                            }).then(response => {
-                                if (response.ok) {
-                                    getMyCalendar();
-                                    showMessage("Termin gelöscht", "Der Termin wurde erfolgreich gelöscht.", "success");
-                                } else {
-                                    alert("Fehler beim Löschen des Termins");
-                                }
-                            });
                         });
+                    });
 
-                        itemEl.appendChild(deletebtn);
-                    }
+                    itemEl.appendChild(deletebtn);
                 }
-            } catch (error) {
-
             }
             if (state == 1) {
                 itemEl.style.opacity = "0.3";
             }
 
 
-            if (item.subtext.indexOf("ANGEFRAGT") != -1) {
+            if (item.subtext.indexOf("ANGEFRAGT") != -1 || item.subtext.indexOf("VORSCHLAG") != -1) {
+                const isVorschlag = item.subtext.indexOf("VORSCHLAG") !== -1;
+                const isAngefragt = !isVorschlag;
+
                 if (samestart == 0) {
                     itemEl.style.opacity = "0.6";
+                    if (state == 1 && isVorschlag) {
+                        itemEl.style.opacity = "1";
+                    }
                 } else {
                     itemEl.style.opacity = "";
                 }
 
-
-                itemEl.style.cursor = "not-allowed";
-                itemEl.style.fontSize = "10px";
-                itemEl.disabled = true;
-                //
-
+                if (isAngefragt) {
+                    itemEl.style.cursor = "not-allowed";
+                    itemEl.disabled = true;
+                } else {
+                    itemEl.style.cursor = "pointer";
+                    itemEl.disabled = false;
+                }
             }
             if (item.color == "rgba(227, 227, 227, 0.4)") {
                 itemEl.style.opacity = "0.9";
@@ -837,6 +1297,9 @@ function showCalendar(items) {
             }
             if (!isAllowed) {
                 itemEl.title = "Das ist kein Standardtermin. Er kann leider nicht über diese Plattform getauscht werden.";
+                itemEl.addEventListener("click", function () {
+                    showMessage("Nicht tauschbar", "Das ist kein Standardtermin. Er kann zurzeit leider nicht über diese Plattform getauscht werden.", "warning");
+                });
             }
             itemEl.addEventListener('mousedown', function () {
                 if (item.subtext.indexOf("ANGEFRAGT") != -1) {
@@ -850,9 +1313,6 @@ function showCalendar(items) {
                     document.getElementById('loginModalTitle').innerText = "Anmeldung erforderlich";
                     var instance = Modal.getOrCreateInstance(document.getElementById('loginModal'));
                     instance.show();
-                    setTimeout(function () {
-
-                    }, 100);
                     return;
                 }
 
@@ -870,13 +1330,7 @@ function showCalendar(items) {
                 }
                 if (item.subtext.includes("OFFER") && item.subtext.indexOf("ANGEFRAGT") == -1) {
                     if (confirm("Willst du das Angebot annehmen?")) {
-                        var url = "";
-                        if (isDev()) {
-                            url = "http://" + window.location.hostname + ":8085/acceptOffer";
-                        } else {
-                            url = "/acceptOffer";
-                        }
-                        url = url + "?selectedTermin=" + offerId;
+                        const url = "/acceptOffer?selectedTermin=" + offerId;
                         fetch(url, {
                             method: 'GET',
                             credentials: 'include'
@@ -910,6 +1364,32 @@ function showCalendar(items) {
                             }
                         });
 
+                    }
+                    return;
+                } else if (state == 1 && item.subtext && item.subtext.indexOf('VORSCHLAG') !== -1) {
+                    // Ghost-Vorschläge: wie auswählbare Ziel-Slots behandeln (Toggle)
+                    if (itemEl.style.border == "3px solid rgb(13, 92, 16)") {
+                        itemEl.style.border = "";
+                        gesucht.forEach((element, index) => {
+                            if (element.day == currentDay && element.start == item.start && element.end == item.end) {
+                                gesucht.splice(index, 1);
+                            }
+                        });
+                    } else {
+                        itemEl.style.border = "3px solid rgb(13, 92, 16)";
+                        gesucht.push({
+                            title: offer ? offer.title : item.title,
+                            subtext: '',
+                            color: 'rgba(227, 227, 227, 0.4)',
+                            start: item.start,
+                            end: item.end,
+                            day: currentDay
+                        });
+                    }
+                    if (gesucht.length > 0) {
+                        document.getElementById('confirmOffer').disabled = false;
+                    } else {
+                        document.getElementById('confirmOffer').disabled = true;
                     }
                     return;
                 } else if (state == 1 && item.title.indexOf("(") != -1) {
@@ -993,7 +1473,72 @@ function showCalendar(items) {
                 }
 
             });
-            if (!isUnderOther) {
+            // In State 1 (Auswahl) nur Offers der ausgewählten Veranstaltung anzeigen
+            if (state == 1 && item.subtext && item.subtext.indexOf('OFFER') !== -1 && offer && offer.title) {
+                try {
+                    const selectedBase = offer.title.split("(")[0].trim();
+                    const itemBase = item.title.split("(")[0].trim();
+                    if (selectedBase !== itemBase) {
+                        const slotKey = currentDay + '|' + item.start + '|' + item.end;
+                        if (!renderedPlaceholders.has(slotKey)) {
+                            const phEl = document.createElement('div');
+                            phEl.classList.add('item');
+                            phEl.style.backgroundColor = 'rgba(227, 227, 227, 0.4)';
+                            phEl.innerHTML = `<strong class="item-title">${sanitizeHtml(selectedBase.split(" ")[0])}</strong><hr class="title-line"><div class="badge text-bg-secondary smallbadge"></div>`;
+                            phEl.style.top = `${timeToPosition(item.start)}%`;
+                            phEl.style.height = `${timeToPosition(item.end) - timeToPosition(item.start)}%`;
+                            phEl.style.marginLeft = `${samestart * 15}px`;
+                            phEl.addEventListener("mouseenter", function () {
+                                phEl.style.zIndex = 100;
+                                phEl.classList.add("foreground");
+                            });
+                            phEl.addEventListener("mouseleave", function () {
+                                phEl.style.zIndex = 1;
+                                phEl.classList.remove("foreground");
+                            });
+                            phEl.addEventListener('mousedown', function () {
+                                if (!isAllowed) return;
+                                if (localStorage.getItem('loggedIn') !== 'true') {
+                                    document.getElementById('loginModalTitle').innerText = "Anmeldung erforderlich";
+                                    var instance = Modal.getOrCreateInstance(document.getElementById('loginModal'));
+                                    instance.show();
+                                    return;
+                                }
+                                if (phEl.style.border == "3px solid rgb(13, 92, 16)") {
+                                    phEl.style.border = "";
+                                    gesucht.forEach((element, index) => {
+                                        if (element.day == currentDay && element.start == item.start && element.end == item.end) {
+                                            gesucht.splice(index, 1);
+                                        }
+                                    });
+                                } else {
+                                    phEl.style.border = "3px solid rgb(13, 92, 16)";
+                                    gesucht.push({
+                                        title: offer.title,
+                                        subtext: '',
+                                        color: 'rgba(227, 227, 227, 0.4)',
+                                        start: item.start,
+                                        end: item.end,
+                                        day: currentDay
+                                    });
+                                }
+                                if (gesucht.length > 0) {
+                                    document.getElementById('confirmOffer').disabled = false;
+                                } else {
+                                    document.getElementById('confirmOffer').disabled = true;
+                                }
+                            });
+                            dayEl.appendChild(phEl);
+                            renderedPlaceholders.add(slotKey);
+                        }
+                        return;
+                    }
+                } catch (e) { }
+            }
+
+            const isOffer = (item.subtext && item.subtext.indexOf('OFFER') !== -1);
+            const isAngefragt = (item.subtext && item.subtext.indexOf('ANGEFRAGT') !== -1);
+            if (!isUnderOther || isOffer || isPlaceholder || isAngefragt) {
                 dayEl.appendChild(itemEl);
             }
         });
@@ -1002,38 +1547,81 @@ function showCalendar(items) {
     });
     resizeDayHeaders();
 }
-// Manage Visibility
-var whoamiurl = "/";
-if (isDev()) {
-    whoamiurl = "http://" + window.location.hostname + ":8085/whoami";
-} else {
-    whoamiurl = "/whoami";
-}
+const whoamiurl = "/whoami";
 var loggedIn = localStorage.getItem('loggedIn') === 'true';
-var name = "";
 var whoamidata = "";
 
 
 function manageVisibility() {
+    var isAdmin = localStorage.getItem('isAdmin') === 'true';
+
     if (loggedIn) {
         loggedIn = true;
         document.getElementById('fileupload').disabled = false;
         document.getElementById('removeAllOvers').style.visibility = "visible";
+
         document.getElementById('loginshowbtntext').innerText = "Ausloggen";
+
+        if (document.getElementById('loginshowbtn-mobile')) {
+            document.getElementById('loginshowbtn-mobile').style.display = 'none';
+        }
+        if (document.getElementById('loginshowbtn-menu-mobile')) {
+            document.getElementById('loginshowbtn-menu-mobile').style.display = 'block';
+        }
+
+        // Admin-Link anzeigen/verstecken
+        if (document.getElementById('admin-link')) {
+            document.getElementById('admin-link').style.display = isAdmin ? 'block' : 'none';
+        }
+
         document.getElementById('feedbackbtn').style.display = "inline";
         document.getElementById('privateMailBox').style.display = "block";
         document.getElementById('confirmOffer').style.visibility = "";
-        document.getElementById('createPasskey').style.display = "block";
+
+        if (sgSettingsBox) sgSettingsBox.style.display = '';
+        initUserStudiengangUI().catch(err => console.debug('SG init failed', err));
+        if (document.getElementById('createPasskey')) {
+            document.getElementById('createPasskey').style.display = 'inline-block';
+        }
+        if (document.getElementById('managePasskeysBtn')) {
+            document.getElementById('managePasskeysBtn').style.display = 'inline-block';
+        }
+
+        if (localStorage.getItem('evaluation_login_redirect') === 'true') {
+            localStorage.removeItem('evaluation_login_redirect');
+            window.location.href = '/evaluation.html';
+        }
 
     } else {
         document.getElementById('title').innerText = "Wochenkalender (Nicht eingeloggt)";
         document.getElementById('removeAllOvers').style.visibility = "hidden";
         document.getElementById('confirmOffer').style.visibility = "hidden";
+
         document.getElementById('loginshowbtntext').innerText = "Anmelden";
+
+        if (document.getElementById('loginshowbtn-mobile')) {
+            document.getElementById('loginshowbtn-mobile').style.display = 'inline-block';
+        }
+        if (document.getElementById('loginshowbtn-menu-mobile')) {
+            document.getElementById('loginshowbtn-menu-mobile').style.display = 'none';
+        }
+
+        // Admin-Link verstecken
+        if (document.getElementById('admin-link')) {
+            document.getElementById('admin-link').style.display = 'none';
+        }
 
         if (document.getElementById('uploadHint') != null) {
             document.getElementById('uploadHint').style.display = "block";
         }
+        hidePasskeyManager();
+        if (document.getElementById('createPasskey')) {
+            document.getElementById('createPasskey').style.display = 'none';
+        }
+        if (document.getElementById('managePasskeysBtn')) {
+            document.getElementById('managePasskeysBtn').style.display = 'none';
+        }
+        if (sgSettingsBox) sgSettingsBox.style.display = 'none';
     }
 }
 manageVisibility();
@@ -1044,8 +1632,8 @@ fetch(whoamiurl, {
     credentials: 'include'
 }).then(response => {
     if (response.ok) {
-        response.text().then(data => {
-            if (data.includes("student.hs-rm.de")) {
+        response.json().then(data => {
+            if (data.hsMail && data.hsMail.includes("student.hs-rm.de")) {
                 if (localStorage.getItem('loggedIn') == null) {
                     localStorage.setItem('loggedIn', "true");
                     localStorage.setItem('uploadLocalCalendarIfNotExist', "true");
@@ -1053,9 +1641,10 @@ fetch(whoamiurl, {
                 }
                 loggedIn = true;
                 isLoggedIn = true;
-                whoamidata = data;
+                whoamidata = data.hsMail;
                 document.getElementById('title').innerText = "Wochenkalender für " + extractName(whoamidata);
                 localStorage.setItem('whoami', extractName(whoamidata));
+                localStorage.setItem('isAdmin', data.isAdmin === true ? 'true' : 'false');
                 manageVisibility();
 
             } else {
@@ -1065,6 +1654,7 @@ fetch(whoamiurl, {
                     return;
                 }
                 localStorage.removeItem('loggedIn');
+                localStorage.removeItem('isAdmin');
                 loggedIn = false;
                 manageVisibility();
             }
@@ -1086,21 +1676,23 @@ function extractName(adress) {
 
 // Auto Calendar Upload after Registration
 
-function checkCalendarAutoUpload() {
-    var url = "";
-    if (isDev()) {
-        url = "http://" + window.location.hostname + ":8085/uploadKalender";
-    } else {
-        url = "/uploadKalender";
-    }
-
+async function checkCalendarAutoUpload() {
     if (localStorage.getItem('tempCalendar') != null && localStorage.getItem('loggedIn') !== 'true') {
         showIcalCalendar(ical.parseICS(localStorage.getItem('tempCalendar')));
     } else if (localStorage.getItem('uploadLocalCalendar') === 'true' && localStorage.getItem('tempCalendar') != null) {
-        fetch(url, {
+        // Sicherstellen, dass ggf. fehlender Studiengang zuerst gesetzt wird (Gating im Upload)
+        try {
+            const sg = await getMyStudiengang();
+            if (!sg || !sg.id) {
+                localStorage.setItem('uploadAfterStudiengang', 'true');
+                try { await checkAndPromptStudiengang(); } catch { }
+                return;
+            }
+        } catch { }
+        fetch("/uploadKalender", {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'text/plain;charset=UTF-8'
             },
             body: localStorage.getItem('tempCalendar'),
             credentials: 'include'
@@ -1185,12 +1777,7 @@ mailUpdateBtn.addEventListener('click', function () {
         mailUpdate.value = "";
         return;
     }
-    var url = "";
-    if (isDev()) {
-        url = "http://" + window.location.hostname + ":8085/updatePrivateMail";
-    } else {
-        url = "/updatePrivateMail";
-    }
+    let url = "/updatePrivateMail";
     if (mail.length >= 1) {
         url = url + "?privateMail=" + mail;
     }
@@ -1212,24 +1799,22 @@ mailUpdateBtn.addEventListener('click', function () {
 var demoLogin = document.getElementById('demoLogin');
 var demoLoginInput = document.getElementById('demoLoginInput');
 var betaLoginBox = document.getElementById('betaLoginBox');
-if (isDev()) {
+if (import.meta.env.DEV) {
     demoLogin.style.display = "block";
     demoLoginInput.style.display = "block";
     betaLoginBox.style.display = "block";
+} else {
+    demoLogin.style.display = "none";
+    demoLoginInput.style.display = "none";
+    betaLoginBox.style.display = "none";
 }
 demoLogin.addEventListener('click', function () {
-    var url = "";
     if (demoLoginInput.value == "" || demoLoginInput.value == null || demoLoginInput.value > 100 || demoLoginInput.value < 1) {
         alert("Die Nummer muss zwischen 1 und 100 liegen");
         return;
     }
 
-    if (isDev()) {
-        url = "http://" + window.location.hostname + ":8085/betaLogin?number=" + demoLoginInput.value;
-    } else {
-        url = "/betaLogin?number=" + demoLoginInput.value;
-    }
-    fetch(url, {
+    fetch("/betaLogin?number=" + demoLoginInput.value, {
         method: 'GET',
         credentials: 'include'
     }).then(response => {
@@ -1242,37 +1827,90 @@ demoLogin.addEventListener('click', function () {
     });
 });
 
-var loginshowbtn = document.getElementById('loginshowbtn');
-loginshowbtn.addEventListener('mousedown', function () {
+// Login-Button Event Handler (gemeinsame Funktion)
+function handleLoginButtonClick() {
     if (localStorage.getItem('loggedIn') === 'true') {
         logout();
     } else {
         var instance = Modal.getOrCreateInstance(document.getElementById('loginModal'));
         instance.show();
         setTimeout(async function () {
-            // is passkey supported?
-            if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
-                let doc = document.getElementById('passkey-login-button');
-                doc.focus();
-            } else {
-                document.getElementById('email').focus();
+            const emailInput = document.getElementById('email');
 
+            if (await supportsConditionalPasskeys()) {
+                if (emailInput) {
+                    emailInput.focus({ preventScroll: true });
+                }
+                return;
+            }
+
+            if (window.PublicKeyCredential && typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function') {
+                try {
+                    const uvpaAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+                    if (uvpaAvailable) {
+                        const doc = document.getElementById('passkey-login-button');
+                        if (doc) {
+                            doc.focus();
+                            return;
+                        }
+                    }
+                } catch (error) {
+                    console.debug('UVPA-Check fehlgeschlagen', error);
+                }
+            }
+
+            if (emailInput) {
+                emailInput.focus({ preventScroll: true });
             }
         }, 125);
     }
-});
+}
+
+// Event Listener für Desktop-Button
+var loginshowbtn = document.getElementById('loginshowbtn');
+if (loginshowbtn) {
+    loginshowbtn.addEventListener('mousedown', handleLoginButtonClick);
+}
+
+// Event Listener für Mobile-Button (Anmelden - außerhalb Menü)
+var loginshowbtnMobile = document.getElementById('loginshowbtn-mobile');
+if (loginshowbtnMobile) {
+    loginshowbtnMobile.addEventListener('click', handleLoginButtonClick);
+}
+
+// Event Listener für Mobile-Button (Ausloggen - im Menü)
+var loginshowbtnMenuMobile = document.getElementById('loginshowbtn-menu-mobile');
+if (loginshowbtnMenuMobile) {
+    loginshowbtnMenuMobile.addEventListener('click', handleLoginButtonClick);
+}
+
+var loginModalElement = document.getElementById('loginModal');
+if (loginModalElement) {
+    loginModalElement.addEventListener('hidden.bs.modal', function () {
+        cancelConditionalPasskeyRequest();
+    });
+}
+
+if (localStorage.getItem('evaluation_login_redirect') === 'true') {
+    setTimeout(function () {
+        if (localStorage.getItem('loggedIn') !== 'true') {
+            var instance = Modal.getOrCreateInstance(document.getElementById('loginModal'));
+            instance.show();
+        } else {
+            localStorage.removeItem('evaluation_login_redirect');
+            window.location.href = '/evaluation.html';
+        }
+    }, 500);
+}
 
 function logout(all = false) {
-    var url = "";
-    if (isDev()) {
-        url = "http://" + window.location.hostname + ":8085/logmeout";
-    } else {
-        url = "/logmeout";
-    }
+    let url = "/logmeout";
     if (all) {
         url += "?all=true";
     }
-    loginshowbtn.disabled = true;
+    if (loginshowbtn) loginshowbtn.disabled = true;
+    if (loginshowbtnMobile) loginshowbtnMobile.disabled = true;
+    if (loginshowbtnMenuMobile) loginshowbtnMenuMobile.disabled = true;
 
     fetch(url, {
         method: 'GET',
@@ -1285,14 +1923,23 @@ function logout(all = false) {
                 localStorage.removeItem('tempCalendar');
                 localStorage.removeItem('loggedIn');
                 localStorage.removeItem('whoami');
+                localStorage.removeItem('isAdmin');
+                hidePasskeyManager();
                 showMessage("Erfolgreich ausgeloggt", "Du wurdest erfolgreich ausgeloggt");
-                setTimeout(function () {
+
+                if (import.meta.env.DEV) {
                     window.location.href = "/";
-                }, 2500);
+                } else {
+                    setTimeout(function () {
+                        window.location.href = "/";
+                    }, 2500);
+                }
             }
 
         } else {
-            loginshowbtn.removeAttribute("disabled");
+            if (loginshowbtn) loginshowbtn.removeAttribute("disabled");
+            if (loginshowbtnMobile) loginshowbtnMobile.removeAttribute("disabled");
+            if (loginshowbtnMenuMobile) loginshowbtnMenuMobile.removeAttribute("disabled");
             showMessage("Fehler beim Ausloggen", "Fehler beim Ausloggen. Bitte versuche es erneut");
         }
     });
@@ -1311,13 +1958,21 @@ window.addEventListener('load', () => {
         document.querySelector('#pow-login').configure({
             strings: {
                 label: 'Prüfe auf Roboter...',
-                verified: "Student erkannt",
+                verified: "Prüfung erfolgreich",
                 verifying: "Prüfe auf Roboter...",
                 error: "Fehler. Roboter erkannt!",
 
             },
         });
     }
+    // Falls ein zurückgehaltener Upload vorhanden ist und Benutzer eingeloggt ist, sofort SG-Abfrage anzeigen
+    try {
+        if (localStorage.getItem('loggedIn') === 'true' && localStorage.getItem('uploadAfterStudiengang') === 'true' && localStorage.getItem('tempCalendar')) {
+            setTimeout(async () => {
+                try { await checkAndPromptStudiengang(); } catch { }
+            }, 0);
+        }
+    } catch { }
 });
 document.querySelector('#pow-login').addEventListener('statechange', (ev) => {
     if (ev.detail.state === 'verified') {
@@ -1339,13 +1994,14 @@ setInterval(() => {
 }, 1000);
 
 async function createPasskey() {
-    // Prüfen, ob der User angemeldet ist
+    const registerButton = document.getElementById('register-passkey');
+    if (registerButton) {
+        registerButton.disabled = true;
+    }
 
     try {
         // Registrierungsoptionen vom Server abrufen
-        const optionsUrl = isDev()
-            ? `http://${window.location.hostname}:8085/webauthn/register/options`
-            : "/webauthn/register/options";
+        const optionsUrl = "/webauthn/register/options";
         const csrfoptions = await getCsrfToken();
 
         const optionsResponse = await fetch(optionsUrl, {
@@ -1377,8 +2033,8 @@ async function createPasskey() {
         // Das Credential-Objekt transformieren, sodass ArrayBuffers in base64url-kodierte Strings umgewandelt werden
         const credentialData = transformCredential(credential);
 
-        // Label (z.B. aus einem Input-Feld) ermitteln – passe den Selector ggf. an
-        const label = document.getElementById('labelInput')?.value || "Default Label";
+        const userProvidedLabel = passkeyLabelInput ? passkeyLabelInput.value.trim() : "";
+        const label = userProvidedLabel.length > 0 ? userProvidedLabel : "Passkey";
 
         // Payload zusammenstellen: publicKey-Objekt mit dem Credential und dem Label
         const payload = {
@@ -1389,9 +2045,7 @@ async function createPasskey() {
         };
 
         // Registrierungsdaten an den Server schicken
-        const registerUrl = isDev()
-            ? `http://${window.location.hostname}:8085/webauthn/register`
-            : "/webauthn/register";
+        const registerUrl = "/webauthn/register";
 
 
         const csrfregister = await getCsrfToken();
@@ -1407,27 +2061,38 @@ async function createPasskey() {
         if (!registerResponse.ok) {
             throw new Error("Fehler beim Erstellen des Passkeys");
         }
-        alert("Passkey erfolgreich erstellt!");
+        showMessage("Passkey erstellt", "Dein Passkey wurde erfolgreich erstellt und kann jetzt verwendet werden.");
         var instance = Modal.getOrCreateInstance(document.getElementById('passkey-modal'), {
             backdrop: 'static',
             keyboard: false
         });
         instance.hide();
+        if (passkeyLabelInput) {
+            passkeyLabelInput.value = "";
+        }
+        await loadPasskeys();
 
     } catch (error) {
         console.error("Error during passkey registration:", error);
-        alert("Fehler beim Erstellen des Passkeys. Entweder dein Browser oder Betriebssystem hat Probleme bei der Unterstützung von Passkeys oder du hast bereits einen Passkey erstellt.");
+        if (error?.name === 'NotAllowedError') {
+            showMessage("Vorgang abgebrochen", "Die Passkey-Erstellung wurde abgebrochen.");
+        } else {
+            showMessage("Fehler", "Passkey konnte nicht erstellt werden. Prüfe die Geräteeinstellungen oder versuche es später erneut.");
+        }
+    } finally {
+        if (registerButton) {
+            registerButton.disabled = false;
+        }
     }
 }
 
 
-let passkey = document.getElementById('createPasskey');
-passkey.addEventListener('click', function () {
-    createPasskey();
-});
-
-
-
+const createPasskeyButton = document.getElementById('createPasskey');
+if (createPasskeyButton) {
+    createPasskeyButton.addEventListener('click', function () {
+        showPasskeyModal();
+    });
+}
 
 
 // Hilfsfunktion: base64url-kodierten String in ArrayBuffer umwandeln
@@ -1489,14 +2154,7 @@ async function getCsrfToken() {
 async function getAuthOptions() {
     const csrf = await getCsrfToken();
 
-    // URL der Options-Anfrage; beachte ggf. deine Dev-/Prod-Logik
-    const authOptionsUrl = isDev()
-        ? `http://${window.location.hostname}:8085/webauthn/authenticate/options`
-        : "/webauthn/authenticate/options";
-
-    // Optional: Übermittle hier die eingegebene E‑Mail, wenn dein Backend danach filtert
-
-    // Hole die Authentifizierungsoptionen vom Server
+    const authOptionsUrl = "/webauthn/authenticate/options";
     const response = await fetch(authOptionsUrl, {
         method: 'POST',
         credentials: 'include',
@@ -1512,7 +2170,6 @@ async function getAuthOptions() {
         return;
     }
 
-    // Zuerst den JSON-Response parsen
     const options = await response.json();
 
     // Jetzt die base64url-kodierten Binärwerte dekodieren
@@ -1529,13 +2186,78 @@ async function getAuthOptions() {
     return options;
 }
 
+let conditionalPasskeySupport = null;
+let conditionalPasskeyRequest = null;
+let conditionalPasskeyAbortController = null;
+
+async function supportsConditionalPasskeys() {
+    if (!window.PublicKeyCredential || !PublicKeyCredential.isConditionalMediationAvailable) {
+        return false;
+    }
+    if (conditionalPasskeySupport !== null) {
+        return conditionalPasskeySupport;
+    }
+    try {
+        conditionalPasskeySupport = await PublicKeyCredential.isConditionalMediationAvailable();
+    } catch (error) {
+        console.debug('Prüfung auf Passkey-Autofill-Unterstützung fehlgeschlagen', error);
+        conditionalPasskeySupport = false;
+    }
+    return conditionalPasskeySupport;
+}
+
+function cancelConditionalPasskeyRequest() {
+    if (conditionalPasskeyAbortController) {
+        conditionalPasskeyAbortController.abort();
+    }
+    conditionalPasskeyAbortController = null;
+    conditionalPasskeyRequest = null;
+}
+
+async function ensureConditionalPasskeyAutofill() {
+    if (conditionalPasskeyRequest) {
+        return;
+    }
+    if (!(await supportsConditionalPasskeys())) {
+        return;
+    }
+
+    const options = await getAuthOptions();
+    if (!options) {
+        return;
+    }
+
+    conditionalPasskeyAbortController = new AbortController();
+    conditionalPasskeyRequest = navigator.credentials.get({
+        publicKey: options,
+        mediation: 'conditional',
+        signal: conditionalPasskeyAbortController.signal
+    });
+
+    conditionalPasskeyRequest.then(credential => {
+        conditionalPasskeyAbortController = null;
+        conditionalPasskeyRequest = null;
+        if (!credential) {
+            return;
+        }
+        const assertionData = transformAssertion(credential);
+        handlePasskeyLogin(assertionData).catch(error => {
+            console.error('Fehler beim Verarbeiten der Passkey-Antwort:', error);
+        });
+    }).catch(error => {
+        conditionalPasskeyAbortController = null;
+        conditionalPasskeyRequest = null;
+        if (error?.name === 'AbortError' || error?.name === 'NotAllowedError') {
+            console.debug('Passkey-Autofill abgebrochen oder nicht genutzt', error);
+            return;
+        }
+        console.error('Fehler bei der Passkey-Autofill-Anmeldung:', error);
+    });
+}
+
 document.getElementById('passkey-login-button').addEventListener('click', async function () {
     try {
-        const csrf = await getCsrfToken();
-
-
-
-        // Navigator für Authentifizierung aufrufen
+        cancelConditionalPasskeyRequest();
         const assertion = await navigator.credentials.get({ publicKey: await getAuthOptions() });
         const assertionData = transformAssertion(assertion);
         handlePasskeyLogin(assertionData);
@@ -1546,10 +2268,7 @@ document.getElementById('passkey-login-button').addEventListener('click', async 
 });
 
 async function handlePasskeyLogin(assertionData) {
-    // Sende die authentifizierten Daten an den Server
-    const loginUrl = isDev()
-        ? `http://${window.location.hostname}:8085/login/webauthn`
-        : "/login/webauthn";
+    const loginUrl = "/login/webauthn";
 
     const logincsrf = await getCsrfToken();
 
@@ -1570,7 +2289,7 @@ async function handlePasskeyLogin(assertionData) {
 
     const result = await loginResponse.json();
     if (result.authenticated) {
-        console.log(result);            // Erfolgreich authentifiziert; leite weiter (z. B. auf die Startseite)
+        console.log(result);
         window.location.href = result.redirectUrl || "/";
     } else {
         alert("Passkey-Authentifizierung fehlgeschlagen");
@@ -1604,15 +2323,166 @@ function showPasskeyModal() {
             keyboard: false
         });
         instance.show();
-        let registerPasskeybtn = document.getElementById('register-passkey');
-        registerPasskeybtn.addEventListener('click', function () {
-            createPasskey();
-        });
+        const registerPasskeybtn = document.getElementById('register-passkey');
+        if (registerPasskeybtn) {
+            registerPasskeybtn.disabled = false;
+            registerPasskeybtn.onclick = async function () {
+                await createPasskey();
+            };
+        }
+        if (passkeyLabelInput) {
+            passkeyLabelInput.value = "";
+        }
         window.history.replaceState({}, document.title, "/");
     }
 }
 
-// Has Url Parameter "passkey" and show Modal
 if (window.location.search.includes("pk")) {
     showPasskeyModal();
+}
+
+// ===================== Studiengang: Helpers =====================
+async function fetchStudiengaengeList() {
+    if (cachedStudiengaengeListe !== null) {
+        return cachedStudiengaengeListe;
+    }
+
+    if (studiengaengeListPromise !== null) {
+        return studiengaengeListPromise;
+    }
+
+    studiengaengeListPromise = fetch('/api/user/studiengang/list', { credentials: 'include' })
+        .then(async resp => {
+            if (resp.ok) {
+                const data = await resp.json();
+                cachedStudiengaengeListe = data;
+                studiengaengeListPromise = null;
+                return data;
+            }
+            studiengaengeListPromise = null;
+            return [];
+        })
+        .catch(() => {
+            studiengaengeListPromise = null;
+            return [];
+        });
+
+    return studiengaengeListPromise;
+}
+
+async function getMyStudiengang() {
+    if (cachedStudiengang !== null) {
+        return cachedStudiengang;
+    }
+    const resp = await fetch('/api/user/studiengang', { credentials: 'include' });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    cachedStudiengang = data;
+    return cachedStudiengang;
+}
+
+async function setMyStudiengang(studiengangId) {
+    const resp = await fetch('/api/user/studiengang', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ studiengangId }) });
+    if (resp.ok) {
+        cachedStudiengang = null;
+    }
+    return resp.ok;
+}
+
+async function populateStudiengangSelects(current) {
+    const list = await fetchStudiengaengeList();
+    const baseOptions = list.map(s => `<option value="${s.id}">${sanitizeHtml(s.shortCode || '')} – ${sanitizeHtml(s.name || '')}</option>`);
+    if (studiengangSelect) {
+        studiengangSelect.innerHTML = baseOptions.join('');
+        if (current?.id) {
+            studiengangSelect.value = String(current.id);
+        } else if (list.length > 0) {
+            studiengangSelect.value = String(list[0].id);
+        }
+    }
+
+    if (studiengangSettingsSelect) {
+        if (current?.id) {
+            studiengangSettingsSelect.innerHTML = baseOptions.join('');
+            studiengangSettingsSelect.value = String(current.id);
+        } else {
+            const settingsOptions = ['<option value="">Bitte auswählen</option>'].concat(baseOptions);
+            studiengangSettingsSelect.innerHTML = settingsOptions.join('');
+            studiengangSettingsSelect.value = '';
+        }
+    }
+}
+
+async function checkAndPromptStudiengang() {
+    try {
+        const current = await getMyStudiengang();
+        await populateStudiengangSelects(current);
+        if (localStorage.getItem('loggedIn') === 'true' && (!current || !current.id)) {
+            const el = document.getElementById('studiengangModal');
+            const modal = Modal.getOrCreateInstance(el, { backdrop: 'static', keyboard: false });
+            modal.show();
+            return true;
+        }
+        return false;
+    } catch (e) { console.debug('SG prompt failed', e); return false; }
+}
+
+async function initUserStudiengangUI() {
+    const current = await getMyStudiengang();
+    await populateStudiengangSelects(current);
+}
+
+if (saveStudiengangBtn) {
+    saveStudiengangBtn.addEventListener('click', async () => {
+        const id = studiengangSelect && studiengangSelect.value ? parseInt(studiengangSelect.value) : null;
+        if (!id) { alert('Bitte auswählen'); return; }
+        const ok = await setMyStudiengang(id);
+        if (ok) {
+            showMessage('Gespeichert', 'Studiengang gesetzt. Dein Angebote wurden gelöscht.');
+            if (studiengangSettingsSelect) {
+                studiengangSettingsSelect.value = String(id);
+            }
+            const modal = Modal.getOrCreateInstance(document.getElementById('studiengangModal'));
+            modal.hide();
+            if (localStorage.getItem('uploadAfterStudiengang') === 'true' && localStorage.getItem('tempCalendar')) {
+                try {
+                    const body = localStorage.getItem('tempCalendar');
+                    const resp = await fetch('/uploadKalender', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+                        body,
+                        credentials: 'include'
+                    });
+                    if (resp.ok) {
+                        localStorage.removeItem('uploadAfterStudiengang');
+                        localStorage.removeItem('uploadLocalCalendar');
+                        localStorage.removeItem('tempCalendar');
+                        showMessage('Erfolg', 'Kalender erfolgreich hochgeladen');
+                        getMyCalendar();
+                        return;
+                    } else {
+                        showMessage('Fehler', 'Fehler beim Hochladen des Kalenders');
+                    }
+                } catch (e) { console.debug('Upload nach SG fehlgeschlagen', e); }
+            }
+            getMyCalendar();
+        } else {
+            alert('Fehler beim Speichern');
+        }
+    });
+}
+
+if (saveStudiengangSettingsBtn) {
+    saveStudiengangSettingsBtn.addEventListener('click', async () => {
+        const idStr = studiengangSettingsSelect ? studiengangSettingsSelect.value : '';
+        if (!idStr) { alert('Bitte Studiengang auswählen'); return; }
+        if (!confirm('Achtung: deine Angebote werden gelöscht. Fortfahren?')) return;
+        const ok = await setMyStudiengang(parseInt(idStr));
+        if (ok) {
+            showMessage('Studiengang geändert', 'Kalender/Angebote gelöscht. Lade Daten neu…');
+            getMyCalendar();
+        } else {
+            alert('Fehler beim Speichern');
+        }
+    });
 }

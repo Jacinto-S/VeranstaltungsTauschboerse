@@ -8,16 +8,12 @@ import jakarta.persistence.Table;
 import org.springframework.security.web.webauthn.api.Bytes;
 import org.springframework.security.web.webauthn.api.PublicKeyCredentialUserEntity;
 
-import java.io.Serializable;
-
 @Entity
 @Table(name = "public_key_credential_user_entity")
-public class JpaPublicKeyCredentialUserEntity implements PublicKeyCredentialUserEntity, Serializable {
+public class JpaPublicKeyCredentialUserEntity implements PublicKeyCredentialUserEntity {
 
     private static final long serialVersionUID = 1L;
 
-    // Da die ID ein user handle (max. 64 Byte) ist, speichern wir diesen als
-    // Base64Url-kodierten String.
     @Id
     @Column(name = "id", nullable = false, length = 3072)
     @Convert(converter = BytesAttributeConverter.class)
@@ -29,11 +25,9 @@ public class JpaPublicKeyCredentialUserEntity implements PublicKeyCredentialUser
     @Column(name = "display_name", nullable = false)
     private String displayName;
 
-    // Standard-Konstruktor (erforderlich für JPA)
     protected JpaPublicKeyCredentialUserEntity() {
     }
 
-    // Konstruktor für den produktiven Einsatz
     public JpaPublicKeyCredentialUserEntity(Bytes id, String name, String displayName) {
         this.id = id;
         this.name = name;

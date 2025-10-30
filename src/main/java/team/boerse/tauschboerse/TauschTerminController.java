@@ -1,18 +1,13 @@
 package team.boerse.tauschboerse;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,26 +16,29 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import team.boerse.tauschboerse.audit.AuditEventType;
+import team.boerse.tauschboerse.audit.AuditService;
+import team.boerse.tauschboerse.audit.SemesterUtil;
 import team.boerse.tauschboerse.mail.MailUtils;
+import team.boerse.tauschboerse.metrics.UserMetricsService;
+import team.boerse.tauschboerse.settings.SystemMode;
+import team.boerse.tauschboerse.settings.SystemSettings;
+import team.boerse.tauschboerse.settings.SystemSettingsService;
 
 @RestController
+@RequiredArgsConstructor
 public class TauschTerminController {
 
-    @Autowired
-    private KalenderRepository kalenderRepository;
-
-    @Autowired
-    private TauschTerminRepository tauschTerminRepository;
-    @Autowired
-    private KalenderTerminRepository kalenderTerminRepository;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private final CounterService counterService = null;
-
-    Logger logger = LoggerFactory.getLogger(TauschTerminController.class);
+    private final KalenderRepository kalenderRepository;
+    private final TauschTerminRepository tauschTerminRepository;
+    private final KalenderTerminRepository kalenderTerminRepository;
+    private final UserRepository userRepository;
+    private final AuditService auditService;
+    private final UserMetricsService userMetricsService;
+    private final SystemSettingsService systemSettingsService;
+    private final team.boerse.tauschboerse.studiengang.NotSharedService notSharedService;
+    private final Logger logger = LoggerFactory.getLogger(TauschTerminController.class);
 
     @GetMapping("/removeMyOffers")
     public ResponseEntity<String> removeMyOffers() {
@@ -53,7 +51,13 @@ public class TauschTerminController {
             tauschTerminRepository.delete(termin);
         }
         logger.info("User " + user.getHsMail() + " removed all offers");
-        counterService.incrementCounter("removeMyOffers");
+        try {
+            auditService.logEvent(user.getId(), AuditEventType.OFFER_DELETE,
+                    "Removed all offers");
+            userMetricsService.recordActivity(user.getId());
+        } catch (Exception ex) {
+            logger.warn("Failed to record audit/metrics for removeMyOffers", ex);
+        }
         return ResponseEntity.ok().build();
     }
 
@@ -64,11 +68,27 @@ public class TauschTerminController {
         if (user == null) {
             return ResponseEntity.badRequest().body("User not logged in");
         }
+
+        // Prüfe System-Modus: Im POOLED_3CYCLE ist Direktannahme nicht erlaubt
+        SystemSettings settings = systemSettingsService.getOrCreateSettings();
+        if (settings.getMode() == SystemMode.POOLED_3CYCLE) {
+            return ResponseEntity.status(409)
+                    .body("Direktannahmen sind im Pooled-Modus deaktiviert. Ihre Anfrage wird in der nächsten Runde geprüft.");
+        }
+
         KalenderTermin kalenderTermin = kalenderTerminRepository.findById(selectedTermin).orElse(null);
         if (kalenderTermin == null) {
             return ResponseEntity.badRequest().body("KalenderTermin not found");
         }
-        TauschTermin tauschTermin = tauschTerminRepository.findTauschTerminByAngebot(kalenderTermin);
+
+        TauschTermin tauschTermin = null;
+        try {
+            tauschTermin = tauschTerminRepository.findWithLockByAngebot(kalenderTermin);
+        } catch (Exception lockEx) {
+            logger.warn("Lock contention for offer {}: {}", selectedTermin, lockEx.getMessage());
+            return ResponseEntity.status(409)
+                    .body("Dieses Angebot wird gerade von jemand anderem bearbeitet. Bitte versuchen Sie es erneut.");
+        }
         if (tauschTermin == null) {
             return ResponseEntity.badRequest().body("TauschTermin not found");
         }
@@ -80,6 +100,24 @@ public class TauschTerminController {
         User tauschPartner = userRepository.findById(tauschTermin.userid).orElse(null);
         if (tauschPartner == null) {
             return ResponseEntity.badRequest().body("TauschPartner not found");
+        }
+
+        try {
+            String base = kalenderTermin.getName() != null ? kalenderTermin.getName().split("\\(")[0].trim() : "";
+            Long mySg = user.getStudiengang() != null ? user.getStudiengang().getId() : null;
+            Long partnerSg = tauschPartner.getStudiengang() != null ? tauschPartner.getStudiengang().getId() : null;
+            boolean nsMine = mySg != null && notSharedService.isNotShared(base, mySg);
+            boolean nsPartner = partnerSg != null && notSharedService.isNotShared(base, partnerSg);
+            if ((nsMine || nsPartner) && !java.util.Objects.equals(mySg, partnerSg)) {
+                return ResponseEntity.status(409).body(
+                        "Dieser Tausch ist nicht möglich, da ihr unterschiedliche Studiengänge habt.");
+            }
+        } catch (Exception ignore) {
+        }
+
+        TauschTermin sanity = tauschTerminRepository.findTauschTerminByAngebot(kalenderTermin);
+        if (sanity == null || sanity.getId() != tauschTermin.getId()) {
+            return ResponseEntity.status(409).body("Das Angebot ist nicht mehr verfügbar.");
         }
 
         // Erstelle neue Termine
@@ -117,7 +155,6 @@ public class TauschTerminController {
         Kalender kalenderTauschPartner = kalenderRepository.findByUserId(tauschPartner.getId());
         if (kalenderTauschPartner != null) {
             kalenderTauschPartner.getTermine().remove(kalenderTermin);
-            kalenderTauschPartner.getTermine().remove(oldTerminOfUser);
             kalenderTauschPartner.getTermine().add(newTerminForTauschPartner);
             KalenderTermin oldTerminOfTauschPartner = null;
             for (KalenderTermin termin : kalenderTauschPartner.getTermine()) {
@@ -142,9 +179,6 @@ public class TauschTerminController {
         tauschTerminRepository.delete(tauschTermin);
         clearOverlappingTauschtermine(user, tauschPartner, newTerminForUser, newTerminForTauschPartner);
 
-        // remove All Offers for User and Tauschpartner if on same day and time as new
-        // Termin
-
         String infosForFrontend = createConfirmationText(null, tauschPartner, newTerminForUser,
                 newTerminForTauschPartner);
         String infosForTauschPartner = createConfirmationText(tauschPartner, user, newTerminForTauschPartner,
@@ -153,7 +187,19 @@ public class TauschTerminController {
 
         MailUtils.sendMail(tauschPartner.getHsMail(), tauschPartner.getPrivateMail(), "Erfolgreiche Terminvermittlung",
                 infosForTauschPartner);
-        counterService.incrementCounter("acceptedOffer");
+
+        try {
+            auditService.logEvent(user.getId(), AuditEventType.MATCH_SUCCESS,
+                    "Accepted offer with user " + tauschPartner.getId());
+            userMetricsService.recordOfferAcceptance(user.getId());
+            userMetricsService.recordSuccessfulMatch(user.getId());
+            userMetricsService.recordActivity(user.getId());
+            userMetricsService.getOrCreateMetrics(tauschPartner.getId(),
+                    SemesterUtil.getSemesterForDate(new java.util.Date()));
+            userMetricsService.recordSuccessfulMatch(tauschPartner.getId());
+        } catch (Exception ex) {
+            logger.warn("Failed to record audit/metrics for acceptOffer", ex);
+        }
 
         return ResponseEntity.ok().body(infosForFrontend);
     }
@@ -308,36 +354,10 @@ public class TauschTerminController {
     }
 
     public static String createMailtoLink(String to, String cc, String subject, String body) {
-        StringBuilder mailto = new StringBuilder("mailto:");
-
-        try {
-            if (to != null && !to.isEmpty()) {
-                mailto.append(URLEncoder.encode(to, "UTF-8"));
-            }
-
-            boolean firstParam = true;
-
-            if (cc != null && !cc.isEmpty()) {
-                mailto.append(firstParam ? "?" : "&");
-                mailto.append("cc=").append(URLEncoder.encode(cc, "UTF-8"));
-                firstParam = false;
-            }
-
-            if (subject != null && !subject.isEmpty()) {
-                mailto.append(firstParam ? "?" : "&");
-                mailto.append("subject=").append(URLEncoder.encode(subject, "UTF-8"));
-                firstParam = false;
-            }
-
-            if (body != null && !body.isEmpty()) {
-                mailto.append(firstParam ? "?" : "&");
-                mailto.append("body=").append(URLEncoder.encode(body, "UTF-8").replace("+", "%20"));
-            }
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
-        }
-
-        return mailto.toString();
+        List<String> ccList = new ArrayList<>();
+        if (cc != null && !cc.isBlank())
+            ccList.add(cc);
+        return MailUtils.createMailtoLink(to, ccList, subject, body);
     }
 
     record UserKalenderTerminDTO(String title, String subtext, String color, String start, String end, int day) {
@@ -346,7 +366,6 @@ public class TauschTerminController {
     record Angebot(UserKalenderTerminDTO angebot, UserKalenderTerminDTO[] gesucht) {
     }
 
-    @SuppressWarnings("null")
     @Transactional
     @PostMapping("/createOffer")
     public ResponseEntity<String> createOffer(@RequestBody Angebot angebot) {
@@ -379,7 +398,17 @@ public class TauschTerminController {
         TauschTermin tauschTermin = new TauschTermin(user.getId(), terminangebot, gesucht);
         logger.info("User " + user.getHsMail() + " created an offer for " + terminangebot.getName());
         tauschTerminRepository.save(tauschTermin);
-        counterService.incrementCounter("createdOffer");
+        try {
+            auditService.logEvent(user.getId(), AuditEventType.OFFER_CREATE,
+                    "Created offer(s): " + terminangebot.getName() + " with "
+                            + gesucht.size() + " Offers");
+            userMetricsService.getOrCreateMetrics(user.getId(),
+                    SemesterUtil.getSemesterForDate(new java.util.Date()));
+            userMetricsService.recordOfferCreation(user.getId(), angebot.gesucht.length);
+            userMetricsService.recordActivity(user.getId());
+        } catch (Exception ex) {
+            logger.warn("Failed to record audit/metrics for createOffer", ex);
+        }
         return ResponseEntity.ok().build();
     }
 
@@ -393,11 +422,14 @@ public class TauschTerminController {
 
         Calendar calendar = Calendar.getInstance();
         calendar.set(Calendar.DAY_OF_WEEK, dto.day() + 2);
-
+        calendar.set(Calendar.SECOND, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
         calendar.set(Calendar.HOUR_OF_DAY, (int) startHour);
         calendar.set(Calendar.MINUTE, (int) startMinute);
         Date startDate = calendar.getTime();
         calendar.set(Calendar.DAY_OF_WEEK, dto.day() + 2);
+        calendar.set(Calendar.SECOND, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
         calendar.set(Calendar.HOUR_OF_DAY, (int) endHour);
         calendar.set(Calendar.MINUTE, (int) endMinute);
         Date endDate = calendar.getTime();

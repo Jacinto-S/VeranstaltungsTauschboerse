@@ -1,9 +1,9 @@
 package team.boerse.tauschboerse;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -12,8 +12,16 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Temporal;
+import jakarta.persistence.TemporalType;
+import lombok.Getter;
+import lombok.Setter;
+import team.boerse.tauschboerse.studiengang.Studiengang;
 
+@Setter
+@Getter
 @Entity
 public class User {
 
@@ -29,6 +37,21 @@ public class User {
     private Boolean isBanned;
     private String banReason;
     private Boolean isAdmin;
+
+    // Neue Felder für Metrics
+    private Boolean usesPasskeys = false;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(nullable = true)
+    private Date registrationDate;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(nullable = true)
+    private Date lastActivityDate;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "studiengang_id", nullable = true)
+    private Studiengang studiengang;
 
     public User(String hsMail, String privateMail,
             Boolean isBanned, String banReason) {
@@ -48,41 +71,4 @@ public class User {
         return accessToken;
     }
 
-    public long getId() {
-        return id;
-    }
-
-    public String getHsMail() {
-        return hsMail;
-    }
-
-    public String getPrivateMail() {
-        return privateMail;
-    }
-
-    public void setPrivateMail(String privateMail) {
-        this.privateMail = privateMail;
-    }
-
-    public Boolean isBanned() {
-        return isBanned;
-    }
-
-    public void setBanned(Boolean isBanned) {
-        this.isBanned = isBanned;
-    }
-
-    public String getBanReason() {
-        return banReason == null ? "" : banReason;
-    }
-
-    public void setBanReason(String banReason) {
-        this.banReason = banReason;
-    }
-
-    public Boolean isAdmin() {
-        return isAdmin;
-    }
-
-    // Getter, Setter und Konstruktoren hier...
 }

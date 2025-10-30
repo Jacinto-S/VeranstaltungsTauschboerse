@@ -36,7 +36,7 @@ public class CaptchaController {
     public ResponseEntity<Altcha.Challenge> createChallenge() {
         try {
             ChallengeOptions options = new ChallengeOptions()
-                    .setMaxNumber(150_000L) // 0.1 Million => Standard Challenge
+                    .setMaxNumber(50_000L) // 0.1 Million => Standard Challenge
                     .setHmacKey(hmacKey)
                     .setExpiresInSeconds(1800);
 

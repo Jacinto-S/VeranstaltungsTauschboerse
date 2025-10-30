@@ -4,10 +4,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import team.boerse.tauschboerse.webauthn.JpaUserCredentialRepository.SerializableCredentialRecordImpl;
-import jakarta.persistence.Converter;
 import org.springframework.security.web.webauthn.api.Bytes;
 import org.springframework.security.web.webauthn.api.CredentialRecord;
 
@@ -35,7 +33,6 @@ public class JpaCredentialRecord implements Serializable {
     @Convert(converter = BytesAttributeConverter.class)
     private Bytes userId;
 
-    // Hier wird der gesamte CredentialRecord als serialisierter Payload gespeichert
     @Column(name = "payload", nullable = false, columnDefinition = "BLOB")
     private byte[] payload;
 

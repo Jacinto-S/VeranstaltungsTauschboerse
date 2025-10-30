@@ -7,13 +7,12 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,29 +20,32 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import io.micrometer.core.annotation.Timed;
-import io.micrometer.core.aop.TimedAspect;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.prometheus.metrics.core.metrics.Counter;
 import net.fortuna.ical4j.data.CalendarBuilder;
 import net.fortuna.ical4j.data.ParserException;
 import net.fortuna.ical4j.model.DateTime;
 import net.fortuna.ical4j.model.component.CalendarComponent;
+import lombok.RequiredArgsConstructor;
+import team.boerse.tauschboerse.audit.AuditService;
+import team.boerse.tauschboerse.metrics.UserMetricsService;
+import team.boerse.tauschboerse.settings.SystemSettingsService;
+import team.boerse.tauschboerse.studiengang.NotSharedService;
+import team.boerse.tauschboerse.suggestions.GroupSuggestionService;
+import team.boerse.tauschboerse.suggestions.GroupSuggestionService.SuggestedSlot;
 
 @RestController
+@RequiredArgsConstructor
 public class KalenderController {
 
-    @Autowired
-    private KalenderTerminRepository kalenderTerminRepository;
-    @Autowired
-    private KalenderRepository kalenderRepository;
-    @Autowired
-    private TauschTerminRepository tauschTerminRepository;
-
-    Logger logger = LoggerFactory.getLogger(KalenderController.class);
+    private final KalenderTerminRepository kalenderTerminRepository;
+    private final KalenderRepository kalenderRepository;
+    private final TauschTerminRepository tauschTerminRepository;
+    private final UserRepository userRepository;
+    private final AuditService auditService;
+    private final UserMetricsService userMetricsService;
+    private final SystemSettingsService systemSettingsService;
+    private final GroupSuggestionService groupSuggestionService;
+    private final NotSharedService notSharedService;
+    private final Logger logger = LoggerFactory.getLogger(KalenderController.class);
 
     public static KalenderTerminType getKalenderType(String kalenderEintrag) {
         Matcher matcher = Pattern.compile("\\(([^)]+)\\)").matcher(kalenderEintrag);
@@ -52,7 +54,8 @@ public class KalenderController {
                 case "Ü", "U" -> KalenderTerminType.U;
                 case "P" -> KalenderTerminType.P;
                 case "V" -> KalenderTerminType.V;
-                case "S" -> KalenderTerminType.S;
+                case "S", "SU" -> KalenderTerminType.S;
+                case "T" -> KalenderTerminType.T;
                 default -> KalenderTerminType.UNKNOWN;
             };
         }
@@ -60,40 +63,115 @@ public class KalenderController {
     }
 
     @PostMapping("/uploadKalender")
-    public void uploadICSFile(@RequestBody String icsFile)
-            throws IOException, ParserException, ParseException {
+    public ResponseEntity<String> uploadICSFile(@RequestBody String icsFile) throws IOException {
         User user = UserUtil.getUser();
         if (user == null) {
-            return;
+            return ResponseEntity.status(401).body("Not authenticated");
         }
         List<Kalender> oldkalenderList = kalenderRepository.findAllByUserId(user.getId());
+        if (icsFile == null || icsFile.isBlank()) {
+            return ResponseEntity.badRequest().body("Empty body");
+        }
 
-        StringReader sin = new StringReader(icsFile);
-        CalendarBuilder builder = new CalendarBuilder();
-        net.fortuna.ical4j.model.Calendar calendar = builder.build(sin);
+        String normalized = icsFile;
+        if (normalized.startsWith("\uFEFF")) {
+            normalized = normalized.substring(1);
+        }
+        String trimmed = normalized.stripLeading();
+        if (!trimmed.toUpperCase().startsWith("BEGIN:VCALENDAR")) {
+            logger.warn("Received non-ICS upload (does not start with BEGIN:VCALENDAR)");
+            return ResponseEntity.badRequest().body("Invalid ICS content");
+        }
+        net.fortuna.ical4j.model.Calendar calendar;
+        try {
+            StringReader sin = new StringReader(icsFile);
+            CalendarBuilder builder = new CalendarBuilder();
+            calendar = builder.build(sin);
+        } catch (ParserException e) {
+            logger.warn("Failed to parse ICS upload: {}", e.getMessage());
+            return ResponseEntity.badRequest().body("Invalid ICS format");
+        } catch (Exception e) {
+            logger.warn("Error while handling ICS upload: {}", e.getMessage());
+            return ResponseEntity.badRequest().body("Invalid ICS");
+        }
         Kalender kalender = new Kalender();
         kalender.setUserId(user.getId());
         List<KalenderTermin> termine = kalender.getTermine();
-        for (CalendarComponent o : calendar.getComponents()) {
-            net.fortuna.ical4j.model.Component component = o;
-            if (component.getName().equals("VEVENT")) {
-                termine.add(getTermin(component));
+        try {
+            for (CalendarComponent o : calendar.getComponents()) {
+                net.fortuna.ical4j.model.Component component = o;
+                if (component.getName().equals("VEVENT")) {
+                    try {
+                        termine.add(getTermin(component));
+                    } catch (ParseException pe) {
+                        logger.warn("Skipping malformed VEVENT: {}", pe.getMessage());
+                    }
+                }
             }
+        } catch (Exception ex) {
+            logger.warn("Error iterating calendar components: {}", ex.getMessage());
+            return ResponseEntity.badRequest().body("Invalid ICS events");
         }
         kalender.setTermine(termine);
         if (oldkalenderList != null && oldkalenderList.size() > 0) {
-
-            // remove all oldKalenders
+            java.util.Set<Long> oldTerminIds = new java.util.HashSet<>();
             for (Kalender old : oldkalenderList) {
-                kalenderRepository.delete(old);
+                if (old != null && old.getTermine() != null) {
+                    for (KalenderTermin t : old.getTermine()) {
+                        if (t != null)
+                            oldTerminIds.add(t.getId());
+                    }
+                    old.getTermine().clear();
+                    kalenderRepository.save(old);
+                }
             }
 
-            for (TauschTermin termin : tauschTerminRepository.findTauschTerminByUserid(user.getId())) {
-                tauschTerminRepository.delete(termin);
+            java.util.List<TauschTermin> myOffers = tauschTerminRepository.findTauschTerminByUserid(user.getId());
+            if (myOffers != null && !myOffers.isEmpty()) {
+                tauschTerminRepository.deleteAll(myOffers);
+            }
+
+            if (!oldTerminIds.isEmpty()) {
+                try {
+                    kalenderTerminRepository.deleteAllById(oldTerminIds);
+                } catch (Exception ignore) {
+                    for (Long id : oldTerminIds) {
+                        try {
+                            kalenderTerminRepository.deleteById(id);
+                        } catch (Exception ex) {
+                        }
+                    }
+                }
+            }
+
+            for (Kalender old : oldkalenderList) {
+                try {
+                    kalenderRepository.delete(old);
+                } catch (Exception ex) {
+                    logger.warn("Failed to delete old calendar {}: {}", old != null ? old.getUserId() : -1,
+                            ex.getMessage());
+                }
             }
         }
         logger.info(String.format("User %s uploaded a new calendar", user.getHsMail()));
         kalenderRepository.save(kalender);
+        try {
+            groupSuggestionService.rebuildCache();
+        } catch (Exception ex) {
+            logger.warn("Failed to rebuild suggestion cache after upload: {}", ex.getMessage());
+        }
+        try {
+            auditService.logEvent(user.getId(), team.boerse.tauschboerse.audit.AuditEventType.CALENDAR_UPLOAD,
+                    "Uploaded calendar");
+            userMetricsService.getOrCreateMetrics(user.getId(),
+                    team.boerse.tauschboerse.audit.SemesterUtil.getSemesterForDate(new java.util.Date()));
+            userMetricsService.recordCalendarUpload(user.getId());
+            User u = user;
+            u.setLastActivityDate(new java.util.Date());
+        } catch (Exception ex) {
+            logger.warn("Failed to record audit/metrics for calendar upload", ex);
+        }
+        return ResponseEntity.ok("OK");
     }
 
     @SuppressWarnings("null")
@@ -121,7 +199,6 @@ public class KalenderController {
             return;
         }
         if (kalender.getTermine().stream().noneMatch(t -> t.id == terminid)) {
-            // search all tauschtermine for this termin
             List<TauschTermin> tauschTermine = tauschTerminRepository.findTauschTerminByUserid(user.getId());
             TauschTermin tauschTerminToRemove = null;
             KalenderTermin terminToRemove = null;
@@ -137,11 +214,17 @@ public class KalenderController {
                     tauschTerminToRemove.getGesucht().remove(terminToRemove);
                     // save
                     tauschTerminRepository.save(tauschTerminToRemove);
-                    // if length of gesucht is 0, delete tauschTermin
                     if (tauschTerminToRemove.getGesucht().size() == 0) {
                         tauschTerminRepository.delete(tauschTerminToRemove);
                     }
                     logger.info(String.format("User %s removed a single Offer", user.getHsMail()));
+                    try {
+                        auditService.logEvent(user.getId(), team.boerse.tauschboerse.audit.AuditEventType.OFFER_DELETE,
+                                "Removed single offer linked to a calendar entry");
+                        userMetricsService.recordActivity(user.getId());
+                    } catch (Exception ex) {
+                        logger.warn("Failed to record audit/metrics for offer delete", ex);
+                    }
                     break;
                 }
             }
@@ -153,32 +236,36 @@ public class KalenderController {
         kalenderRepository.save(kalender);
         kalenderTerminRepository.delete(termin);
         logger.info(String.format("User %s removed a calendar entry", user.getHsMail()));
+        try {
+            auditService.logEvent(user.getId(), team.boerse.tauschboerse.audit.AuditEventType.CALENDAR_DELETE,
+                    "Deleted calendar entry");
+            userMetricsService.recordActivity(user.getId());
+        } catch (Exception ex) {
+            logger.warn("Failed to record audit/metrics for calendar delete", ex);
+        }
     }
 
-    @Timed(value = "getKalender", description = "Get the calendar of the user", histogram = true, percentiles = { 0.95,
-            0.99 })
     @GetMapping(value = "/myKalender", produces = "application/json")
-    public ResponseEntity<String> getKalender(@RequestParam(required = false) String terminid)
-            throws JsonProcessingException {
+    public ResponseEntity<MyKalenderResponseDTO> getKalender(@RequestParam(required = false) String terminid) {
         long processingTime = System.currentTimeMillis();
         User user = UserUtil.getUser();
         if (user == null) {
-            return ResponseEntity.badRequest().body("No user found");
+            return ResponseEntity.badRequest().build();
         }
         List<Kalender> kalenderListResult = kalenderRepository.findAllByUserId(user.getId());
         if (kalenderListResult == null || kalenderListResult.size() > 1) {
             logger.error("User has more than one calendar, this should not happen!");
-            return ResponseEntity.badRequest().body("No calendar found");
+            return ResponseEntity.badRequest().build();
         }
 
         if (kalenderListResult.size() == 0) {
-            return ResponseEntity.badRequest().body("No calendar found");
+            return ResponseEntity.badRequest().build();
         }
 
         Kalender kalender = kalenderListResult.get(0);
 
         if (kalender == null) {
-            return ResponseEntity.badRequest().body("No calendar found");
+            return ResponseEntity.badRequest().build();
         }
         List<List<KalenderTerminDTO>> kalenderList = new ArrayList<>();
         Calendar c = Calendar.getInstance();
@@ -198,17 +285,19 @@ public class KalenderController {
             kalenderList.get(day).add(terminDTO);
         }
 
-        // find all termine not of type V from user
         List<KalenderTermin> termina = null;
         termina = kalender.getTermine().stream().filter(t -> t.getType() != KalenderTerminType.V)
                 .toList();
 
-        // User wants to see possible offers for a specific termin
+        team.boerse.tauschboerse.settings.SystemSettings settings = systemSettingsService.getOrCreateSettings();
+        boolean isPooledMode = settings.getMode() == team.boerse.tauschboerse.settings.SystemMode.POOLED_3CYCLE;
+
         boolean overwiew = terminid == null;
         String realTitle = "";
         String termincopy = terminid;
         String[] starts = { "08:15", "10:00", "11:45", "14:15", "16:00", "17:45", "19:30" };
         String[] ends = { "09:45", "11:30", "13:15", "15:45", "17:30", "19:15", "21:00" };
+
         for (KalenderTermin ter : termina) {
             terminid = "" + ter.getId();
             if (termincopy != null && termincopy.equals(terminid)) {
@@ -216,13 +305,10 @@ public class KalenderController {
             }
             if (terminid != null) {
 
-                List<TauschTermin> termine = tauschTerminRepository.findAll();
-                termine.sort((a, b) -> a.gesucht.size() - b.gesucht.size());
-
                 KalenderTermin usersTermin = kalenderTerminRepository.findById(Long.parseLong(terminid))
                         .orElse(null);
                 if (usersTermin == null) {
-                    return ResponseEntity.badRequest().body("No termin found");
+                    return ResponseEntity.badRequest().build();
                 }
                 String title = usersTermin.getName().split("\\(")[0];
                 c.setTime(usersTermin.getStart());
@@ -231,28 +317,44 @@ public class KalenderController {
                 c.setTime(usersTermin.getEnd());
                 int userday = c.get(Calendar.DAY_OF_WEEK) - 2;
 
-                for (TauschTermin termin : termine) {
-                    if (termin.angebot.getName().indexOf(title) == -1) {
-                        continue;
-                    }
+                if (!isPooledMode && (termincopy == null || termincopy.equals(terminid))) {
+                    List<TauschTermin> fremde = tauschTerminRepository
+                            .findByAngebot_TypeAndAngebot_NameStartingWithAndUseridNot(
+                                    usersTermin.getType(), title.trim(), user.getId());
+                    fremde.sort((a, b) -> Integer.compare(a.getGesucht() != null ? a.getGesucht().size() : 0,
+                            b.getGesucht() != null ? b.getGesucht().size() : 0));
 
-                    if (termin.userid != user.getId() && usersTermin.getType() == termin.angebot.getType()) {
-                        KalenderTermin kalenderTermin = termin.angebot;
-                        if (usersTermin.getStart().equals(kalenderTermin.getStart())
-                                && usersTermin.getName().indexOf(title) == -1) {
+                    for (TauschTermin termin : fremde) {
+                        KalenderTermin angebot = termin.getAngebot();
+                        if (angebot == null)
                             continue;
+                        if (termin.getGesucht() == null)
+                            continue;
+
+                        Long mySg = user.getStudiengang() != null ? user.getStudiengang().getId() : null;
+                        User partner = userRepository.findById(termin.getUserid()).orElse(null);
+                        Long partnerSg = partner != null && partner.getStudiengang() != null
+                                ? partner.getStudiengang().getId()
+                                : null;
+
+                        String myTerminBase = title.trim();
+                        if (mySg != null && notSharedService.isNotShared(myTerminBase, mySg)) {
+                            if (!Objects.equals(mySg, partnerSg))
+                                continue;
+                        }
+                        String angebotBase = angebot.getName() != null ? angebot.getName().split("\\(")[0].trim() : "";
+                        if (partnerSg != null && notSharedService.isNotShared(angebotBase, partnerSg)) {
+                            if (!Objects.equals(mySg, partnerSg))
+                                continue;
                         }
                         for (KalenderTermin ge : termin.getGesucht()) {
                             c.setTime(ge.getStart());
                             String start = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
                                     c.get(Calendar.MINUTE));
-
                             c.setTime(ge.getEnd());
-
-                            if (userstart.equals(start) && c.get(Calendar.DAY_OF_WEEK) - 2 == userday) {
-                                KalenderTermin angebot = termin.angebot;
-                                Date sDate = angebot.getStart();
-                                c.setTime(sDate);
+                            int gday = c.get(Calendar.DAY_OF_WEEK) - 2;
+                            if (userstart.equals(start) && gday == userday) {
+                                c.setTime(angebot.getStart());
                                 String angebotstart = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
                                         c.get(Calendar.MINUTE));
                                 c.setTime(angebot.getEnd());
@@ -264,95 +366,217 @@ public class KalenderController {
                                 c.setTime(angebot.getStart());
                                 int theday = c.get(Calendar.DAY_OF_WEEK) - 2;
 
-                                boolean found = false;
-                                KalenderTerminDTO override = null;
+                                boolean slotBelegt = false;
                                 for (KalenderTerminDTO check : kalenderList.get(theday)) {
-                                    if (check.start().equalsIgnoreCase(terminDTO.start())
-                                            && check.end().equalsIgnoreCase(terminDTO.end())) {
-                                        found = true;
-                                        if (check.subtext.equalsIgnoreCase("ANGEFRAGT")) {
-                                            override = check;
-                                        }
+                                    if (hasTimeOverlap(check.start(), check.end(), terminDTO.start(),
+                                            terminDTO.end())) {
+                                        slotBelegt = true;
                                         break;
                                     }
                                 }
-                                if (!found) {
-                                    kalenderList.get(theday).add(terminDTO);
-                                } else if (override != null) {
-                                    kalenderList.get(theday).remove(override);
+                                if (!slotBelegt) {
                                     kalenderList.get(theday).add(terminDTO);
                                 }
                                 break;
                             }
-
                         }
-                    } else if (usersTermin.getType() == termin.angebot.getType()) {
-                        for (KalenderTermin ge : termin.gesucht) {
-                            c.setTime(ge.getStart());
+                    }
+                }
 
-                            Date sDate = ge.getStart();
-                            c.setTime(sDate);
-                            if (termincopy != null && !terminid.equals(termincopy)) {
-                                continue;
+                List<TauschTermin> eigene = tauschTerminRepository
+                        .findByUseridAndAngebot_TypeAndAngebot_NameStartingWith(
+                                user.getId(), usersTermin.getType(), title.trim());
+                for (TauschTermin termin : eigene) {
+                    if (termin.getGesucht() == null)
+                        continue;
+                    for (KalenderTermin ge : termin.getGesucht()) {
+                        c.setTime(ge.getStart());
+                        if (termincopy != null && !terminid.equals(termincopy)) {
+                            continue;
+                        }
+                        String angebotstart = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
+                                c.get(Calendar.MINUTE));
+                        c.setTime(ge.getEnd());
+                        String angebotend = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
+                                c.get(Calendar.MINUTE));
+
+                        String baseTitle = ge.getName() != null ? ge.getName().split("\\(")[0].trim() : "";
+                        String computedTitle = baseTitle;
+                        try {
+                            Long sgId = user.getStudiengang() != null ? user.getStudiengang().getId() : null;
+                            List<SuggestedSlot> suggestions = groupSuggestionService
+                                    .getSuggestionsForCourse(baseTitle, ge.getType(), sgId);
+                            int targetDayIndex = c.get(Calendar.DAY_OF_WEEK) - 2;
+                            SuggestedSlot matched = null;
+                            for (SuggestedSlot s : suggestions) {
+                                if (s.getDayIndex() == targetDayIndex
+                                        && angebotstart.equalsIgnoreCase(s.getStart())
+                                        && angebotend.equalsIgnoreCase(s.getEnd())) {
+                                    matched = s;
+                                    break;
+                                }
                             }
-                            String angebotstart = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
-                                    c.get(Calendar.MINUTE));
-                            c.setTime(ge.getEnd());
-                            String angebotend = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
-                                    c.get(Calendar.MINUTE));
+                            if (matched != null && matched.getGroup() != null && !matched.getGroup().isBlank()) {
+                                String typeShort = ge.getType().name();
+                                computedTitle = baseTitle + " (" + typeShort + "-" + matched.getGroup() + ")";
+                            }
+                        } catch (Exception ignore) {
+                        }
 
-                            //
+                        KalenderTerminDTO terminDTO = new KalenderTerminDTO(computedTitle, "ANGEFRAGT",
+                                ge.getType().getColorCode(), angebotstart, angebotend, ge.id);
 
-                            KalenderTerminDTO terminDTO = new KalenderTerminDTO(ge.getName(), "ANGEFRAGT",
-                                    ge.getType().getColorCode(), angebotstart, angebotend, ge.id);
-                            c.setTime(ge.getStart());
-                            int theday = c.get(Calendar.DAY_OF_WEEK) - 2;
+                        c.setTime(ge.getStart());
+                        int theday = c.get(Calendar.DAY_OF_WEEK) - 2;
+
+                        boolean hasOverlap = false;
+                        for (KalenderTermin origTermin : kalender.getTermine()) {
+                            c.setTime(origTermin.getStart());
+                            String origStart = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
+                                    c.get(Calendar.MINUTE));
+                            c.setTime(origTermin.getEnd());
+                            String origEnd = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
+                                    c.get(Calendar.MINUTE));
+                            int origDay = c.get(Calendar.DAY_OF_WEEK) - 2;
+
+                            if (origDay == theday && hasTimeOverlap(origStart, origEnd, angebotstart, angebotend)) {
+                                hasOverlap = true;
+                                break;
+                            }
+                        }
+
+                        if (!hasOverlap) {
                             kalenderList.get(theday).add(terminDTO);
-
                         }
                     }
                 }
 
             }
         }
-        if (!overwiew)
-            for (int i = 0; i != 5; i++) {
-                List<KalenderTerminDTO> day = kalenderList.get(i);
-                for (int j = 0; j != 7; j++) {
-                    boolean found = false;
-                    for (KalenderTerminDTO termin : day) {
-                        if (termin.start().equalsIgnoreCase(starts[j])) {
-                            found = true;
-                            break;
-                        }
+        if (!overwiew) {
+            try {
+                KalenderTermin selected = null;
+                try {
+                    if (termincopy != null) {
+                        selected = kalenderTerminRepository.findById(Long.parseLong(termincopy)).orElse(null);
                     }
-                    if (!found) {
-                        String colorcodelightblue = "rgba(227, 227, 227, 0.4)";
-                        day.add(new KalenderTerminDTO(realTitle.split("\\(")[0], "",
-                                colorcodelightblue, starts[j],
-                                ends[j], -1));
+                } catch (Exception ignore) {
+                }
+                if (selected != null && selected.getType() != KalenderTerminType.V) {
+                    String base = selected.getName() != null ? selected.getName().split("\\(")[0].trim() : "";
+                    Long sgId = user.getStudiengang() != null ? user.getStudiengang().getId() : null;
+                    List<SuggestedSlot> suggestions = groupSuggestionService
+                            .getSuggestionsForCourse(base, selected.getType(), sgId);
+
+                    for (SuggestedSlot s : suggestions) {
+                        int theday = s.getDayIndex();
+                        if (theday < 0 || theday >= kalenderList.size())
+                            continue;
+                        List<KalenderTerminDTO> day = kalenderList.get(theday);
+
+                        boolean hasOverlap = false;
+                        for (KalenderTermin origTermin : kalender.getTermine()) {
+                            c.setTime(origTermin.getStart());
+                            String origStart = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
+                                    c.get(Calendar.MINUTE));
+                            c.setTime(origTermin.getEnd());
+                            String origEnd = String.format("%02d:%02d", c.get(Calendar.HOUR_OF_DAY),
+                                    c.get(Calendar.MINUTE));
+                            int origDay = c.get(Calendar.DAY_OF_WEEK) - 2;
+
+                            if (origDay == theday && hasTimeOverlap(origStart, origEnd, s.getStart(), s.getEnd())) {
+                                hasOverlap = true;
+                                break;
+                            }
+                        }
+
+                        if (!hasOverlap) {
+                            for (KalenderTerminDTO existingDTO : day) {
+                                if (hasTimeOverlap(existingDTO.start(), existingDTO.end(), s.getStart(), s.getEnd())) {
+                                    hasOverlap = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (hasOverlap)
+                            continue;
+
+                        String colorGhost = selected.getType().getColorCode();
+                        String typeShort = selected.getType().name();
+                        String group = (s.getGroup() != null && !s.getGroup().isBlank()) ? s.getGroup() : "?";
+                        String title = base + " (" + typeShort + "-" + group + ")";
+                        day.add(new KalenderTerminDTO(title, "VORSCHLAG", colorGhost, s.getStart(), s.getEnd(), -1));
                     }
                 }
+                for (int i = 0; i != 5; i++) {
+                    List<KalenderTerminDTO> day = kalenderList.get(i);
+                    for (int j = 0; j != 7; j++) {
+                        boolean hasOverlap = false;
+                        for (KalenderTerminDTO termin : day) {
+                            if (hasTimeOverlap(termin.start(), termin.end(), starts[j], ends[j])) {
+                                hasOverlap = true;
+                                break;
+                            }
+                        }
+                        if (!hasOverlap) {
+                            String colorcodelightblue = "rgba(227, 227, 227, 0.4)";
+                            day.add(new KalenderTerminDTO(realTitle.split("\\(")[0], "",
+                                    colorcodelightblue, starts[j],
+                                    ends[j], -1));
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                logger.warn("Failed to attach suggestions: {}", ex.getMessage());
             }
+        }
 
-        ObjectMapper objectMapper = new ObjectMapper();
+        MyKalenderResponseDTO response = new MyKalenderResponseDTO(
+                kalenderList,
+                settings.getMode(),
+                settings.getScheduleType(),
+                settings.getIntervalHours(),
+                settings.getDailyTime(),
+                settings.getNextRunAt());
 
-        String json = objectMapper.writeValueAsString(kalenderList);
         processingTime = System.currentTimeMillis() - processingTime;
 
-        // completed @timed
+        try {
+            auditService.logEvent(user.getId(), team.boerse.tauschboerse.audit.AuditEventType.CALENDAR_VIEW,
+                    "Viewed calendar");
+            userMetricsService.recordActivity(user.getId());
+        } catch (Exception ex) {
+            logger.warn("Failed to record audit/metrics for calendar view", ex);
+        }
 
-        return ResponseEntity.ok(json);
+        return ResponseEntity.ok(response);
     }
 
     record KalenderTerminDTO(String title, String subtext, String color, String start, String end, long offerid) {
     }
 
+    record MyKalenderResponseDTO(
+            List<List<KalenderTerminDTO>> calendar,
+            team.boerse.tauschboerse.settings.SystemMode systemMode,
+            team.boerse.tauschboerse.settings.ScheduleType scheduleType,
+            Integer intervalHours,
+            java.time.LocalTime dailyTime,
+            java.time.Instant nextRunAt) {
+    }
+
     private KalenderTermin getTermin(net.fortuna.ical4j.model.Component component) throws ParseException {
         KalenderTermin termin = new KalenderTermin();
-        termin.setName(component.getProperty("SUMMARY").getValue());
-        termin.setDescription(component.getProperty("DESCRIPTION").getValue());
-        termin.setLocation(component.getProperty("LOCATION").getValue());
+        String summary = component.getProperty("SUMMARY") != null ? component.getProperty("SUMMARY").getValue()
+                : "Unbekannt";
+        termin.setName(summary);
+        String description = component.getProperty("DESCRIPTION") != null
+                ? component.getProperty("DESCRIPTION").getValue()
+                : "";
+        termin.setDescription(description);
+        String location = component.getProperty("LOCATION") != null ? component.getProperty("LOCATION").getValue()
+                : "";
+        termin.setLocation(location);
         String startDateString = component.getProperty("DTSTART").getValue();
         DateTime startDate = new DateTime(startDateString);
         Date startDateObject = startDate;
@@ -367,8 +591,18 @@ public class KalenderController {
         return termin;
     }
 
-    @Bean
-    public TimedAspect timedAspect(MeterRegistry registry) {
-        return new TimedAspect(registry);
+    private boolean hasTimeOverlap(String start1, String end1, String start2, String end2) {
+        int start1Minutes = timeToMinutes(start1);
+        int end1Minutes = timeToMinutes(end1);
+        int start2Minutes = timeToMinutes(start2);
+        int end2Minutes = timeToMinutes(end2);
+
+        return start1Minutes < end2Minutes && start2Minutes < end1Minutes;
     }
+
+    private int timeToMinutes(String time) {
+        String[] parts = time.split(":");
+        return Integer.parseInt(parts[0]) * 60 + Integer.parseInt(parts[1]);
+    }
+
 }

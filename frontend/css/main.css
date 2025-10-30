@@ -146,11 +146,37 @@
 
 
 .toast {
-
     margin: 10px;
 
     @media (max-width: 768px) {
         margin: 0px;
+    }
+}
+
+@media (min-width: 992px) {
+    #MessageToast {
+        min-width: 450px;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.25),
+            0 0.25rem 0.75rem rgba(0, 0, 0, 0.15) !important;
+    }
+
+    #MessageToast .toast-header {
+        font-size: 1.1rem;
+        font-weight: 600;
+        padding: 0.75rem 1rem;
+    }
+
+    #MessageToast .toast-body {
+        font-size: 1rem;
+        padding: 1rem;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+}
+
+@media (max-width: 991px) and (min-width: 769px) {
+    #MessageToast {
+        min-width: 350px;
     }
 }
 

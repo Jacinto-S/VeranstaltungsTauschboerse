@@ -5,7 +5,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -15,19 +14,18 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import lombok.RequiredArgsConstructor;
 import team.boerse.tauschboerse.TauschTerminController;
 import team.boerse.tauschboerse.User;
 import team.boerse.tauschboerse.UserRepository;
 import team.boerse.tauschboerse.UserUtil;
 
 @RestController
+@RequiredArgsConstructor
 public class FeedbackController {
 
-    @Autowired
-    private FeedbackRepository feedbackRepository;
-
-    @Autowired
-    private UserRepository userRepository;
+    private final FeedbackRepository feedbackRepository;
+    private final UserRepository userRepository;
 
     @GetMapping("/feedback")
     public List<Feedback> getFeedbacks(Pageable pageable, @RequestParam(defaultValue = "") String password) {
@@ -36,7 +34,7 @@ public class FeedbackController {
         }
 
         User user = UserUtil.getUser();
-        if (user == null || user.isAdmin() != null && !user.isAdmin()) {
+        if (user == null || user.getIsAdmin() != null && !user.getIsAdmin()) {
             return List.of();
         }
         return feedbackRepository.findAllByOrderByCreateDateDesc(pageable).getContent();

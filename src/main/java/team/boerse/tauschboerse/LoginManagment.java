@@ -5,40 +5,38 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.authentication.RememberMeServices;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseCookie;
 
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import team.boerse.tauschboerse.captcha.CaptchaController;
+import lombok.RequiredArgsConstructor;
 
 @EnableScheduling
 @RestController
+@RequiredArgsConstructor
 public class LoginManagment {
 
-	@Autowired
-	UserRepository userRepository;
-
-	@Autowired
-	CaptchaController captchaController;
-
-	@Autowired
-	KalenderRepository kalenderRepository;
-
-	@Autowired
-	private final CounterService counterService = null;
+	private final UserRepository userRepository;
+	private final team.boerse.tauschboerse.audit.AuditService auditService;
+	private final team.boerse.tauschboerse.metrics.UserMetricsService userMetricsService;
+	private final RememberMeServices rememberMeServices;
+	private final UserDetailsService userDetailsService;
 
 	HashMap<String, String> tokens = new HashMap<>();
 	HashMap<String, Long> removeTimerForTokens = new HashMap<>();
@@ -80,7 +78,7 @@ public class LoginManagment {
 	String domain;
 
 	@GetMapping("/betaLogin")
-	public ResponseEntity<String> betaLogin(HttpServletResponse response,
+	public ResponseEntity<String> betaLogin(HttpServletRequest request, HttpServletResponse response,
 			@RequestParam(required = false, defaultValue = "1") String number) {
 		if (!(domain.contains("localhost") || domain.contains("172"))) {
 			return ResponseEntity.badRequest().body("Not allowed");
@@ -95,16 +93,34 @@ public class LoginManagment {
 		User user = userRepository.findByHsMail(hsMail).orElse(null);
 		if (user == null) {
 			user = new User(hsMail, null, false, "");
+			userRepository.save(user);
 		}
-		String accessToken = UUID.randomUUID().toString();
-		user.getAccessToken().add(accessToken);
-		Cookie cookie = new Cookie("sessionToken", accessToken);
-		cookie.setMaxAge(60 * 60 * 24 * 30);
-		cookie.setHttpOnly(true);
-		cookie.setPath("/");
-		response.setHeader("Set-Cookie", UserUtil.convertCookieToSetCookie(cookie));
-		userRepository.save(user);
+
+		UserDetails userDetails = userDetailsService.loadUserByUsername(hsMail);
+		var auth = new UsernamePasswordAuthenticationToken(userDetails, userDetails.getPassword(),
+				userDetails.getAuthorities());
+		SecurityContextHolder.getContext().setAuthentication(auth);
+		try {
+			rememberMeServices.loginSuccess(request, response, auth);
+		} catch (Exception e) {
+			logger.warn("Failed to set remember-me cookie on betaLogin", e);
+		}
 		logger.info(String.format("User %s logged in", hsMail));
+		try {
+			User u = userRepository.findByHsMail(hsMail).orElse(null);
+			Long userId = u != null ? u.getId() : null;
+			auditService.logEvent(userId, team.boerse.tauschboerse.audit.AuditEventType.LOGIN_SUCCESS,
+					team.boerse.tauschboerse.audit.LoginMethod.BETA, "Beta login");
+			userMetricsService.getOrCreateMetrics(userId,
+					team.boerse.tauschboerse.audit.SemesterUtil.getSemesterForDate(new java.util.Date()));
+			userMetricsService.recordLogin(userId, team.boerse.tauschboerse.audit.LoginMethod.BETA);
+			if (u != null) {
+				u.setLastActivityDate(new java.util.Date());
+				userRepository.save(u);
+			}
+		} catch (Exception ex) {
+			logger.warn("Failed to record audit/metrics for betaLogin", ex);
+		}
 		return ResponseEntity.ok().build();
 	}
 
@@ -115,28 +131,54 @@ public class LoginManagment {
 		if (user == null) {
 			return ResponseEntity.badRequest().body("User not logged in");
 		}
-		// Delete Spring Security Session
-		request.getSession().invalidate();
-		// remove remember me cookie
-		response.addCookie(new Cookie("remember-me", null));
 
-		// invalidate all sessions if all is true for this user
+		SecurityContextHolder.clearContext();
 
-		counterService.incrementCounter("loggedOut");
+		try {
+			request.getSession().invalidate();
+		} catch (IllegalStateException e) {
+			logger.debug("Session already invalidated", e);
+		}
+
+		try {
+			rememberMeServices.loginFail(request, response);
+		} catch (Exception e) {
+			logger.debug("Error removing remember-me on server side", e);
+		}
+
+		String ctxPath = request.getContextPath();
+		ResponseCookie cookie = ResponseCookie
+				.from("remember-me", "")
+				.maxAge(0)
+				.path(ctxPath == null || ctxPath.isEmpty() ? "/" : ctxPath)
+				.httpOnly(true)
+				.secure(request.isSecure())
+				.sameSite("Strict")
+				.build();
+		response.addHeader("Set-Cookie", cookie.toString());
+
+		try {
+			auditService.logEvent(user.getId(), team.boerse.tauschboerse.audit.AuditEventType.LOGOUT,
+					"User logged out");
+			userMetricsService.recordActivity(user.getId());
+		} catch (Exception ex) {
+			logger.warn("Failed to write audit/metrics on logout", ex);
+		}
 
 		return ResponseEntity.ok().build();
 	}
 
 	@GetMapping("/whoami")
-	public ResponseEntity<String> whoami(HttpServletRequest request, HttpServletResponse response) {
+	public ResponseEntity<?> whoami(HttpServletRequest request, HttpServletResponse response) {
 		User user = UserUtil.getUser();
 		if (user == null) {
-			counterService.incrementCounter("NotLoggedInUserOpenedPage");
-			return ResponseEntity.ok().body("User not logged in");
+			return ResponseEntity.ok().body("{\"hsMail\": \"User not logged in\", \"isAdmin\": false}");
 		}
 		request.getSession();
-		counterService.incrementCounter("LoggedInUserOpenedPage");
-		return ResponseEntity.ok(user.getHsMail());
+		Map<String, Object> userInfo = new HashMap<>();
+		userInfo.put("hsMail", user.getHsMail());
+		userInfo.put("isAdmin", Boolean.TRUE.equals(user.getIsAdmin()));
+		return ResponseEntity.ok(userInfo);
 	}
 
 	@GetMapping("/updatePrivateMail")
@@ -149,10 +191,14 @@ public class LoginManagment {
 				privateMail == null ? "null" : privateMail));
 		user.setPrivateMail(privateMail);
 		userRepository.save(user);
-		if (privateMail != null) {
-			counterService.incrementCounter("updatedPrivateMail");
-		} else {
-			counterService.incrementCounter("deletedPrivateMail");
+
+		try {
+			String eventDetails = privateMail != null ? "Private email updated to: " + privateMail
+					: "Private email deleted";
+			auditService.logEvent(user.getId(), team.boerse.tauschboerse.audit.AuditEventType.PRIVATE_MAIL_CHANGED,
+					eventDetails);
+		} catch (Exception ex) {
+			logger.warn("Failed to write audit log for PRIVATE_MAIL_CHANGED", ex);
 		}
 
 		return ResponseEntity.ok().build();

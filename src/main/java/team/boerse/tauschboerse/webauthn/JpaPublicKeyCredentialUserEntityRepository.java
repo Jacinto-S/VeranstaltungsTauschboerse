@@ -36,8 +36,6 @@ public class JpaPublicKeyCredentialUserEntityRepository implements PublicKeyCred
 
     @Override
     public void save(PublicKeyCredentialUserEntity userEntity) {
-        // Bei neuen Entitäten ohne gesetzte ID wird persist() verwendet,
-        // andernfalls merge() für Updates.
         System.out.println("Saving user entity: " + userEntity.getId().toBase64UrlString().length());
 
         JpaPublicKeyCredentialUserEntity entity = new JpaPublicKeyCredentialUserEntity(userEntity.getId(),

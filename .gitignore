@@ -46,3 +46,7 @@ tauschkatalog.log
 credentials.txt
 disabled_mailpw.txt
 secure-password.txt
+src/main/resources/static/assets/*
+src/main/resources/static/*.html
+hs_err_*.log
+

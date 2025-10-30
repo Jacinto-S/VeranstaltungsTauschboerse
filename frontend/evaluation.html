@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="de" data-bs-theme="dark">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evaluation - Tauschbörse</title>
+
+    <script type="module" src="./js/evaluation.js" blocking="render" fetchpriority="high"></script>
+    <link rel="stylesheet" href="./scss/styles.scss">
+    <link rel="stylesheet" href="./css/main.css">
+    <link rel="shortcut icon" href="icon.webp">
+
+    <style>
+        .evaluation-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .question-section {
+            background-color: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+
+        .question-section h3 {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            color: var(--bs-emphasis-color);
+            border-bottom: 2px solid var(--bs-primary);
+            padding-bottom: 10px;
+        }
+
+        .question-group {
+            margin-bottom: 25px;
+        }
+
+        .question-label {
+            font-weight: 500;
+            margin-bottom: 10px;
+            display: block;
+            color: var(--bs-body-color);
+        }
+
+        .required::after {
+            content: " *";
+            color: var(--bs-danger);
+        }
+
+        .scale-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .scale-option {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+        }
+
+        .scale-option input[type="radio"] {
+            margin-bottom: 5px;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .scale-option label {
+            font-size: 0.85rem;
+            text-align: center;
+            cursor: pointer;
+            color: var(--bs-secondary-color);
+        }
+
+        @media (max-width: 768px) {
+            .scale-container {
+                flex-wrap: wrap;
+            }
+
+            .scale-option {
+                flex-basis: calc(33.333% - 10px);
+                margin-bottom: 15px;
+            }
+        }
+
+        .form-check {
+            margin-bottom: 10px;
+        }
+
+        .form-check-input {
+            width: 18px;
+            height: 18px;
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .form-check-label {
+            cursor: pointer;
+        }
+
+        textarea.form-control {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .char-counter {
+            font-size: 0.85rem;
+            color: var(--bs-secondary-color);
+            text-align: right;
+            margin-top: 5px;
+        }
+
+        .explanation-box {
+            background-color: var(--bs-secondary-bg);
+            border-left: 4px solid var(--bs-info);
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .explanation-box p {
+            margin: 0;
+            line-height: 1.6;
+        }
+
+        .alert-unsaved {
+            position: sticky;
+            top: 20px;
+            z-index: 100;
+            margin-bottom: 20px;
+        }
+
+        .btn-submit {
+            min-width: 200px;
+        }
+
+        .success-message {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .success-message i {
+            font-size: 4rem;
+            color: var(--bs-success);
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar sticky-top navbar-expand-sm bg-body-tertiary" style="z-index: 1200;">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/"><img src="icon.webp" alt="Logo" width="30" height="30"> Tauschbörse</a>
+            <button class="btn btn-sm btn-outline-secondary" onclick="window.location.href='/'">
+                Zurück zur Hauptseite
+            </button>
+        </div>
+    </nav>
+
+    <div class="evaluation-container">
+        <!-- Login Required Message -->
+        <div id="loginRequired" class="alert alert-warning" style="display: none;">
+            <h4 class="alert-heading">Anmeldung erforderlich</h4>
+            <p>Bitte melde Dich an, um an der Evaluation teilzunehmen.</p>
+            <hr>
+            <button class="btn btn-primary" id="redirectToLogin">Zur Anmeldung</button>
+        </div>
+
+        <!-- Unsaved Changes Alert -->
+        <div id="unsavedAlert" class="alert alert-info alert-unsaved" style="display: none;">
+            <i class="bi bi-info-circle me-2"></i>
+            Du hast ungespeicherte Änderungen. Diese werden automatisch zwischengespeichert.
+        </div>
+
+        <!-- Success Message -->
+        <div id="successMessage" class="success-message" style="display: none;">
+            <i class="bi bi-check-circle-fill"></i>
+            <h2>Vielen Dank für Deine Teilnahme!</h2>
+            <p>Deine Antworten wurden erfolgreich übermittelt.</p>
+            <button class="btn btn-primary mt-3" id="editResponsesBtn">Antworten bearbeiten</button>
+            <button class="btn btn-secondary mt-3" onclick="window.location.href='/'">Zur Hauptseite</button>
+        </div>
+
+        <!-- Evaluation Form -->
+        <div id="evaluationForm">
+            <h1 class="mb-4">Evaluation der Tauschbörse</h1>
+            <p class="text-muted mb-4">Felder mit * sind Pflichtfelder. Deine Antworten werden automatisch
+                zwischengespeichert.</p>
+
+            <form id="evalForm">
+                <!-- A. Allgemeine Nutzung -->
+                <div class="question-section">
+                    <h3>A. Allgemeine Nutzung</h3>
+
+                    <div class="question-group">
+                        <label class="question-label required" for="semesterCount">
+                            In wie vielen Semestern hast du die Tauschbörse bis jetzt verwendet?
+                        </label>
+                        <select class="form-select" id="semesterCount" name="semesterCount" required>
+                            <option value="">Bitte wählen...</option>
+                            <option value="0">0 (erstes Semester)</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4+">4 oder mehr</option>
+                        </select>
+                    </div>
+
+                    <div class="question-group">
+                        <label class="question-label required">
+                            Wie hast du von der Tauschbörse erfahren?
+                        </label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="hearAbout" value="Kommilitonen"
+                                id="hear1">
+                            <label class="form-check-label" for="hear1">Kommilitonen</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="hearAbout" value="Mail" id="hear2">
+                            <label class="form-check-label" for="hear2">E-Mail</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="hearAbout"
+                                value="Foliensatz/Einführungsveranstaltung" id="hear3">
+                            <label class="form-check-label" for="hear3">Foliensatz/Einführungsveranstaltung</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="hearAbout" value="Messengerdienste"
+                                id="hear4">
+                            <label class="form-check-label" for="hear4">Messengerdienste</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="hearAbout" value="Sonstiges"
+                                id="hear5">
+                            <label class="form-check-label" for="hear5">Sonstiges</label>
+                        </div>
+                    </div>
+
+                    <div class="question-group">
+                        <label class="question-label required" for="foundOutside">
+                            Hast du letztendlich außerhalb der Tauschbörse einen Tauschpartner gefunden?
+                        </label>
+                        <select class="form-select" id="foundOutside" name="foundOutside" required>
+                            <option value="">Bitte wählen...</option>
+                            <option value="Ja">Ja</option>
+                            <option value="Nein">Nein</option>
+                            <option value="Nicht zutreffend">Nicht zutreffend</option>
+                        </select>
+                    </div>
+
+                    <div class="question-group">
+                        <label class="question-label required" for="deletedOffers">
+                            Hast du deine Angebote gelöscht oder deaktiviert, wenn du keinen Tauschbedarf mehr hattest?
+                        </label>
+                        <select class="form-select" id="deletedOffers" name="deletedOffers" required>
+                            <option value="">Bitte wählen...</option>
+                            <option value="Ja">Ja</option>
+                            <option value="Manchmal">Manchmal</option>
+                            <option value="Nein">Nein</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- B. Benutzerfreundlichkeit -->
+                <div class="question-section">
+                    <h3>B. Benutzerfreundlichkeit</h3>
+
+                    <div class="question-group">
+                        <label class="question-label required">
+                            Wie leicht verständlich war die Plattform für dich insgesamt?
+                        </label>
+                        <div class="scale-container">
+                            <div class="scale-option">
+                                <input type="radio" name="easeOfUse" value="1" id="ease1" required>
+                                <label for="ease1">1<br>Sehr schwer</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="easeOfUse" value="2" id="ease2">
+                                <label for="ease2">2</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="easeOfUse" value="3" id="ease3">
+                                <label for="ease3">3</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="easeOfUse" value="4" id="ease4">
+                                <label for="ease4">4</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="easeOfUse" value="5" id="ease5">
+                                <label for="ease5">5<br>Sehr leicht</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="question-group">
+                        <label class="question-label required">
+                            Wie intuitiv war die Bedienung der Wunsch- und Tauschfunktionen?
+                        </label>
+                        <div class="scale-container">
+                            <div class="scale-option">
+                                <input type="radio" name="intuitiveFunctions" value="1" id="intuitive1" required>
+                                <label for="intuitive1">1<br>Nicht intuitiv</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="intuitiveFunctions" value="2" id="intuitive2">
+                                <label for="intuitive2">2</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="intuitiveFunctions" value="3" id="intuitive3">
+                                <label for="intuitive3">3</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="intuitiveFunctions" value="4" id="intuitive4">
+                                <label for="intuitive4">4</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="intuitiveFunctions" value="5" id="intuitive5">
+                                <label for="intuitive5">5<br>Sehr intuitiv</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="question-group">
+                        <label class="question-label required">
+                            Wie zuverlässig hat der Login funktioniert?
+                        </label>
+                        <div class="scale-container">
+                            <div class="scale-option">
+                                <input type="radio" name="loginReliability" value="1" id="login1" required>
+                                <label for="login1">1<br>Unzuverlässig</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="loginReliability" value="2" id="login2">
+                                <label for="login2">2</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="loginReliability" value="3" id="login3">
+                                <label for="login3">3</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="loginReliability" value="4" id="login4">
+                                <label for="login4">4</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="loginReliability" value="5" id="login5">
+                                <label for="login5">5<br>Sehr zuverlässig</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="question-group">
+                        <label class="question-label required">
+                            Wie zufrieden warst du mit der E-Mail-Benachrichtigung nach einem erfolgreichen Tausch? Hat
+                            die Koordination mit deinem Kommilitonen und euren Dozenten gut funktioniert?
+                        </label>
+                        <div class="scale-container">
+                            <div class="scale-option">
+                                <input type="radio" name="emailSatisfaction" value="1" id="email1" required>
+                                <label for="email1">1<br>Unzufrieden</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="emailSatisfaction" value="2" id="email2">
+                                <label for="email2">2</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="emailSatisfaction" value="3" id="email3">
+                                <label for="email3">3</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="emailSatisfaction" value="4" id="email4">
+                                <label for="email4">4</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="emailSatisfaction" value="5" id="email5">
+                                <label for="email5">5<br>Sehr zufrieden</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="emailSatisfaction" value="not_used" id="email0">
+                                <label for="email0">Nicht genutzt</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- C. Rundentausch -->
+                <div class="question-section">
+                    <h3>C. Wahrnehmung und Erwartung zum neuen „Rundentausch"</h3>
+
+                    <div class="explanation-box">
+                        <p><strong>Kurz erklärt:</strong></p>
+                        <p>Der geplante Rundentausch sammelt alle Wünsche über einen bestimmten Zeitraum (z. B. 24
+                            Stunden) und sucht anschließend automatisch passende Tauschketten.</p>
+                        <p>Dabei werden auch 3-Wege-Tausche möglich, z. B. A → B → C → A.</p>
+                        <p>Dadurch können mehr Studierende vermittelt werden - allerdings nicht sofort, sondern erst
+                            nach Ablauf einer Sammelrunde.</p>
+                        <p>Der Vorteil liegt also in einer höheren Erfolgsquote, der Nachteil in längerer Wartezeit
+                            (maximal 24 Stunden).</p>
+                    </div>
+
+                    <div class="question-group">
+                        <label class="question-label required">
+                            Wie verständlich findest du das Prinzip des Rundentauschs?
+                        </label>
+                        <div class="scale-container">
+                            <div class="scale-option">
+                                <input type="radio" name="roundExchangeUnderstanding" value="1" id="round1" required>
+                                <label for="round1">1<br>Unverständlich</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="roundExchangeUnderstanding" value="2" id="round2">
+                                <label for="round2">2</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="roundExchangeUnderstanding" value="3" id="round3">
+                                <label for="round3">3</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="roundExchangeUnderstanding" value="4" id="round4">
+                                <label for="round4">4</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="roundExchangeUnderstanding" value="5" id="round5">
+                                <label for="round5">5<br>Sehr verständlich</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="question-group">
+                        <label class="question-label required">
+                            Wie vorteilhaft schätzt du dieses Verfahren im Vergleich zum bisherigen Soforttausch ein?
+                        </label>
+                        <div class="scale-container">
+                            <div class="scale-option">
+                                <input type="radio" name="roundExchangeAdvantage" value="1" id="advantage1" required>
+                                <label for="advantage1">1<br>Viel schlechter</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="roundExchangeAdvantage" value="2" id="advantage2">
+                                <label for="advantage2">2</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="roundExchangeAdvantage" value="3" id="advantage3">
+                                <label for="advantage3">3</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="roundExchangeAdvantage" value="4" id="advantage4">
+                                <label for="advantage4">4</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="roundExchangeAdvantage" value="5" id="advantage5">
+                                <label for="advantage5">5<br>Viel besser</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="question-group">
+                        <label class="question-label required">
+                            Wie empfindest du den beschriebenen Trade-off zwischen schnellerem Soforttausch und höherer
+                            Vermittlungsquote durch Sammelrunden?
+                        </label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="tradeOffPreference" value="instant"
+                                id="tradeoff1" required>
+                            <label class="form-check-label" for="tradeoff1">
+                                Lieber sofort tauschen, auch wenn weniger Matches entstehen
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="tradeOffPreference" value="wait"
+                                id="tradeoff2">
+                            <label class="form-check-label" for="tradeoff2">
+                                Lieber etwas warten, dafür deutlich höhere Chance auf einen Tausch
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="tradeOffPreference" value="depends"
+                                id="tradeoff3">
+                            <label class="form-check-label" for="tradeoff3">
+                                Weiß nicht / kommt auf die Situation an
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- D. Gesamtzufriedenheit -->
+                <div class="question-section">
+                    <h3>D. Gesamtzufriedenheit</h3>
+
+                    <div class="question-group">
+                        <label class="question-label required">
+                            Wie zufrieden bist du insgesamt mit der Tauschbörse in ihrer jetzigen Form?
+                        </label>
+                        <div class="scale-container">
+                            <div class="scale-option">
+                                <input type="radio" name="overallSatisfaction" value="1" id="overall1" required>
+                                <label for="overall1">1<br>Sehr unzufrieden</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="overallSatisfaction" value="2" id="overall2">
+                                <label for="overall2">2</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="overallSatisfaction" value="3" id="overall3">
+                                <label for="overall3">3</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="overallSatisfaction" value="4" id="overall4">
+                                <label for="overall4">4</label>
+                            </div>
+                            <div class="scale-option">
+                                <input type="radio" name="overallSatisfaction" value="5" id="overall5">
+                                <label for="overall5">5<br>Sehr zufrieden</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="question-group">
+                        <label class="question-label required">
+                            Würdest du die Plattform anderen Studierenden empfehlen?
+                        </label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="wouldRecommend" value="Ja"
+                                id="recommend1" required>
+                            <label class="form-check-label" for="recommend1">Ja</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="wouldRecommend" value="Nein"
+                                id="recommend2">
+                            <label class="form-check-label" for="recommend2">Nein</label>
+                        </div>
+                    </div>
+
+                    <div class="question-group">
+                        <label class="question-label required" for="wouldUseAgain">
+                            Würdest du sie wieder verwenden?
+                        </label>
+                        <select class="form-select" id="wouldUseAgain" name="wouldUseAgain" required>
+                            <option value="">Bitte wählen...</option>
+                            <option value="Ja">Ja</option>
+                            <option value="Nein">Nein</option>
+                            <option value="Nicht mehr erforderlich">Nicht mehr erforderlich</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- E. Offenes Feedback -->
+                <div class="question-section">
+                    <h3>E. Offenes Feedback</h3>
+
+                    <div class="question-group">
+                        <label class="question-label" for="frustrations">
+                            Was hat dich am meisten gestört oder verwirrt?
+                        </label>
+                        <textarea class="form-control" id="frustrations" name="frustrations" maxlength="1500"
+                            rows="4"></textarea>
+                        <div class="char-counter">
+                            <span id="frustrationsCounter">0</span> / 1500 Zeichen
+                        </div>
+                    </div>
+
+                    <div class="question-group">
+                        <label class="question-label" for="suggestions">
+                            Hast du weitere Vorschläge oder Wünsche für kommende Semester?
+                        </label>
+                        <textarea class="form-control" id="suggestions" name="suggestions" maxlength="1500"
+                            rows="4"></textarea>
+                        <div class="char-counter">
+                            <span id="suggestionsCounter">0</span> / 1500 Zeichen
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="text-center mb-5">
+                    <button type="submit" class="btn btn-primary btn-lg btn-submit">
+                        <i class="bi bi-send me-2"></i>Evaluation absenden
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+
+</html>

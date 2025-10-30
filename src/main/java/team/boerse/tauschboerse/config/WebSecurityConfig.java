@@ -2,11 +2,8 @@ package team.boerse.tauschboerse.config;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.net.URI;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.Set;
@@ -28,11 +25,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.RememberMeServices;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.authentication.logout.LogoutFilter;
 import org.springframework.security.web.authentication.ott.OneTimeTokenGenerationSuccessHandler;
 import org.springframework.security.web.authentication.ott.RedirectOneTimeTokenGenerationSuccessHandler;
 import org.springframework.security.web.authentication.rememberme.TokenBasedRememberMeServices;
+import org.springframework.security.web.authentication.rememberme.RememberMeAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.lang.NonNull;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -46,41 +44,40 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import team.boerse.tauschboerse.CounterService;
+import lombok.Data;
 import team.boerse.tauschboerse.KalenderRepository;
 import team.boerse.tauschboerse.UserRepository;
+import team.boerse.tauschboerse.audit.AuditEventType;
+import team.boerse.tauschboerse.audit.AuditService;
+import team.boerse.tauschboerse.audit.LoginMethod;
+import team.boerse.tauschboerse.audit.SemesterUtil;
 import team.boerse.tauschboerse.captcha.CaptchaController;
 import team.boerse.tauschboerse.mail.MailUtils;
+import team.boerse.tauschboerse.metrics.UserMetricsService;
 import team.boerse.tauschboerse.webauthn.JpaPublicKeyCredentialUserEntity;
+import lombok.RequiredArgsConstructor;
 
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class WebSecurityConfig {
 
-    UserRepository userRepository;
-
-    MailUtils mailUtils;
-
-    KalenderRepository kalenderRepository;
-    private CounterService counterService = null;
-    CaptchaController captchaController;
-
-    public WebSecurityConfig(UserRepository userRepository, MailUtils mailUtils,
-            KalenderRepository kalenderRepository, CounterService counterService, CaptchaController captchaController) {
-        this.userRepository = userRepository;
-        this.mailUtils = mailUtils;
-        this.kalenderRepository = kalenderRepository;
-        this.counterService = counterService;
-        this.captchaController = captchaController;
-    }
+    private final UserRepository userRepository;
+    private final KalenderRepository kalenderRepository;
+    private final CaptchaController captchaController;
+    private final AuditService auditService;
+    private final UserMetricsService userMetricsService;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, CaptchaFilter captchaFilter,
-            CustomTokenFilter customTokenFilter) throws Exception {
+            CustomTokenFilter customTokenFilter,
+            RememberMeServices rememberMeServices,
+            UserDetailsService userDetailsService) throws Exception {
         http.csrf(csrf -> csrf
                 .ignoringRequestMatchers("/login/ott", "/ott/generate", "/", "/Impressum und Datenschutz.html",
                         "/index.html",
-                        "/requestLogin", "/betaLogin", "/challenge", "/randomFeedback", "/whoami", "/assets/**")
+                        "/requestLogin", "/betaLogin", "/logmeout", "/challenge", "/randomFeedback", "/whoami",
+                        "/assets/**")
                 .requireCsrfProtectionMatcher(request -> {
                     String path = request.getServletPath();
                     if (request.getMethod().equals("OPTIONS") || request.getMethod().equals("GET")) {
@@ -88,26 +85,24 @@ public class WebSecurityConfig {
                     }
                     return path.startsWith("/webauthn") || path.startsWith("/login/webauthn");
                 }));
-        // CSRF-Schutz deaktivieren (nicht empfohlen für Produktionsumgebungen)
 
-        // Autorisierung der Requests
         http.authorizeHttpRequests(authorize -> authorize
-                .requestMatchers("/actuator/**").hasRole("ADMIN") // Nur Benutzer mit Rolle ADMIN dürfen auf
-                // Actuator-Endpunkte zugreifen
+                .requestMatchers("/api/admin/matching-test/simulate").permitAll()
+                .requestMatchers("/actuator/**").hasRole("ADMIN")
+                .requestMatchers("/admin", "/admin.html").hasRole("ADMIN")
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/login/**", "/login/webauthn", "/api/csrf-token", "/ott/generate", "/",
                         "/Impressum und Datenschutz.html",
-                        "/index.html",
+                        "/index.html", "/evaluation.html",
                         "/requestLogin", "/betaLogin",
                         "/challenge", "/randomFeedback", "/whoami",
                         "/assets/**", "/favicon.ico", "/favicon.png")
                 .permitAll().requestMatchers("/acuator/**", "/acuator").hasRole("ADMIN") //
                 .anyRequest().authenticated() // Alle anderen Endpunkte erfordern Authentifizierung
         );
-        // add CaptchaFilter to the filter chain
 
-        // Wochen
         http.addFilterBefore(captchaFilter, UsernamePasswordAuthenticationFilter.class);
-        http.addFilterAfter(customTokenFilter, LogoutFilter.class);
+        http.addFilterAfter(customTokenFilter, RememberMeAuthenticationFilter.class);
 
         // CORS konfigurieren
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
@@ -115,6 +110,7 @@ public class WebSecurityConfig {
                 (ott) -> ott.tokenGenerationSuccessHandler(new MagicLinkOneTimeTokenGenerationSuccessHandler())
                         .successHandler(
                                 (request, response, authentication) -> {
+                                    request.getServletPath();
                                     if (authentication.getPrincipal() == null) {
                                         return;
                                     }
@@ -125,26 +121,35 @@ public class WebSecurityConfig {
                                             .findByHsMail(spruser.getUsername()).orElse(null);
 
                                     if (user != null) {
-                                        // has user a calendar?
                                         boolean calendarExists = kalenderRepository.findByUserId(user.getId()) != null;
                                         if (!calendarExists) {
                                             response.setStatus(HttpServletResponse.SC_CREATED);
                                         } else {
                                             response.setStatus(HttpServletResponse.SC_OK);
                                         }
+                                        try {
+                                            Long userId = user.getId();
+                                            auditService.logEvent(userId,
+                                                    AuditEventType.LOGIN_SUCCESS,
+                                                    LoginMethod.TOKEN,
+                                                    "Magic-link login successful");
+                                            userMetricsService.getOrCreateMetrics(userId,
+                                                    SemesterUtil
+                                                            .getSemesterForDate(new java.util.Date()));
+                                            userMetricsService.recordLogin(userId,
+                                                    LoginMethod.TOKEN);
+                                            user.setLastActivityDate(new java.util.Date());
+                                            userRepository.save(user);
+                                        } catch (Exception ignore) {
+                                        }
                                     }
                                 }));
-        // Basic Auth aktivieren
-
-        // Allowed Origins für -
 
         if (allowedOrigins == null || allowedOrigins.equals("*")) {
             allowedOrigins = "http://localhost:8085,http://localhost:5173,http://192.168.178.28:5173,https://tauschboerse.nkwebservices.de";
 
         }
-
-        // get hostname from domain
-        URL url = new URL(domain);
+        URL url = URI.create(domain).toURL();
         String host = url.getHost();
 
         Set<String> allowedOriginsSet = Arrays.stream(allowedOrigins.split(","))
@@ -155,7 +160,12 @@ public class WebSecurityConfig {
                 : System.getenv("REMEMBERMESECRET");
 
         http.rememberMe(
-                e -> e.alwaysRemember(true).tokenValiditySeconds(1209600 * 2).key(key)); // 4
+                e -> e
+                        .rememberMeServices(rememberMeServices)
+                        .userDetailsService(userDetailsService)
+                        .alwaysRemember(true)
+                        .tokenValiditySeconds(1209600 * 2)
+                        .key(key)); // 4
 
         return http.build();
     }
@@ -178,26 +188,10 @@ public class WebSecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    @Value("${prometheus.password:}")
-    private String passwordFromProperties;
-
     @Bean
     public UserDetailsService users() {
 
         return username -> {
-
-            // Persistiere den Benutzer in der Datenbank, falls er noch nicht existiert
-            if (username.equals("prometheus")) {
-                String password = getPassword();
-
-                String encodedPassword = passwordEncoder().encode(password);
-                return User.builder()
-                        .username("prometheus")
-                        .password(encodedPassword)
-                        .roles("ADMIN")
-                        .build();
-            }
-
             if (!username.toLowerCase().contains("@student")) {
                 return User.builder()
                         .username(username)
@@ -213,16 +207,27 @@ public class WebSecurityConfig {
                         UUID.randomUUID().toString());
 
                 user = userRepository.save(user);
-                return User.builder()
+
+                // Prüfe, ob der Benutzer Admin ist
+                String[] roles = (user.getIsAdmin() != null && user.getIsAdmin()) ? new String[] { "USER", "ADMIN" }
+                        : new String[] { "USER" };
+
+                var userBuilder = User.builder()
                         .username(user.getHsMail())
-                        .roles("USER")
+                        .roles(roles)
                         .password("{noop}" + "password")
                         .build();
+                return userBuilder;
 
             } else {
+                team.boerse.tauschboerse.User user = ouser.get();
+                // Prüfe, ob der Benutzer Admin ist
+                String[] roles = (user.getIsAdmin() != null && user.getIsAdmin()) ? new String[] { "USER", "ADMIN" }
+                        : new String[] { "USER" };
+
                 return User.builder()
-                        .username(ouser.get().getHsMail())
-                        .roles("USER")
+                        .username(user.getHsMail())
+                        .roles(roles)
                         .password("{noop}" + "password")
                         .build();
             }
@@ -231,10 +236,8 @@ public class WebSecurityConfig {
 
     }
 
-    // Beispiel für eine benutzerdefinierte Klasse
     public class CustomTokenBasedRememberMeServices extends TokenBasedRememberMeServices {
 
-        // Konstruktoren passend aufrufen (mit key, userDetailsService)
         public CustomTokenBasedRememberMeServices(String key, UserDetailsService userDetailsService) {
             super(key, userDetailsService);
         }
@@ -245,75 +248,19 @@ public class WebSecurityConfig {
             if (principal instanceof UserDetails) {
                 return ((UserDetails) principal).getUsername();
             }
-            // *** HIER die Prüfung für WebAuthn einfügen ***
             if (principal instanceof PublicKeyCredentialUserEntity) {
                 return ((PublicKeyCredentialUserEntity) principal).getName();
             }
             if (principal instanceof JpaPublicKeyCredentialUserEntity) {
                 return ((JpaPublicKeyCredentialUserEntity) principal).getName();
             }
-            // Fallback (oder Fehler werfen, wenn kein bekannter Typ)
             return principal.toString();
         }
     }
 
-    // In WebSecurityConfig müssten Sie dann diese Custom-Klasse als Bean erstellen
-    // und verwenden.
-
-    // Methode zum Abrufen oder Erstellen des Passworts
-    private String getPassword() {
-        // 1. Passwort aus Umgebungsvariablen laden
-        String password = System.getenv("PROMETHEUS_PASSWORD");
-
-        // 2. Falls das Passwort nicht in Umgebungsvariablen gefunden wird, aus den
-        // Properties laden
-        if (password == null || password.isEmpty()) {
-            password = passwordFromProperties;
-        }
-
-        // 3. Wenn kein Passwort gefunden wurde, erstelle oder lade es aus einer Datei
-        if (password == null || password.isEmpty()) {
-            try {
-                password = getPasswordFromFile();
-            } catch (IOException e) {
-                throw new RuntimeException("Fehler beim Erstellen oder Lesen der Passwort-Datei", e);
-            }
-        }
-
-        return password;
-    }
-
-    // Methode zum Erstellen oder Laden des Passworts aus einer Datei
-    private String getPasswordFromFile() throws IOException {
-        Path path = Paths.get("./secure-password.txt");
-
-        if (!Files.exists(path)) {
-            String generatedPassword = generateRandomPassword();
-            Files.writeString(path, generatedPassword);
-
-            path.toFile().setReadable(false, false);
-            path.toFile().setReadable(true, true);
-            path.toFile().setWritable(false, false);
-            path.toFile().setWritable(true, true);
-        }
-
-        return Files.readString(path).trim();
-    }
-
-    private String generateRandomPassword() {
-        int length = 32;
-        String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+";
-        SecureRandom secureRandom = new SecureRandom();
-        StringBuilder password = new StringBuilder(length);
-        for (int i = 0; i < length; i++) {
-            password.append(characters.charAt(secureRandom.nextInt(characters.length())));
-        }
-        return password.toString();
-    }
-
     @Bean
     CustomTokenFilter customTokenFilter() {
-        return new CustomTokenFilter();
+        return new CustomTokenFilter(userRepository, auditService, userMetricsService, rememberMeServices());
     }
 
     @Value(value = "${cors.allowedOrigins:*}")
@@ -329,7 +276,7 @@ public class WebSecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
-        configuration.setAllowedHeaders(Arrays.asList("Content-Type"));
+        configuration.setAllowedHeaders(Arrays.asList("Content-Type", "x-csrf-token"));
         configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
@@ -341,12 +288,11 @@ public class WebSecurityConfig {
     @Value("${domain}")
     private String domain;
 
-    public class MagicLinkOneTimeTokenGenerationSuccessHandler implements OneTimeTokenGenerationSuccessHandler {
+    public class MagicLinkOneTimeTokenGenerationSuccessHandler
+            implements OneTimeTokenGenerationSuccessHandler {
 
         private final OneTimeTokenGenerationSuccessHandler redirectHandler = new RedirectOneTimeTokenGenerationSuccessHandler(
                 domain);
-
-        // constructor omitted
 
         @Override
         public void handle(HttpServletRequest request, HttpServletResponse response, OneTimeToken oneTimeToken)
@@ -357,12 +303,20 @@ public class WebSecurityConfig {
             String magicLink = builder.toUriString();
             String email = (oneTimeToken.getUsername());
             team.boerse.tauschboerse.User user = userRepository.findByHsMail(email).orElse(null);
-            if (user != null && (user.isBanned() != null && user.isBanned())) {
+            if (user != null && (user.getIsBanned() != null && user.getIsBanned())) {
                 return;
             }
 
             boolean calendarExists = user != null && kalenderRepository.findByUserId(user.getId()) != null;
-            counterService.incrementCounter("requestLogin");
+            try {
+                Long userId = null;
+                team.boerse.tauschboerse.User u = userRepository.findByHsMail(email).orElse(null);
+                if (u != null)
+                    userId = u.getId();
+                auditService.logEvent(userId, team.boerse.tauschboerse.audit.AuditEventType.LOGIN_REQUEST,
+                        "Magic-link requested for " + email);
+            } catch (Exception ex) {
+            }
             MailUtils.sendMail(email, null, "Anmeldelink für die Tauschbörse",
                     "Klicke hier um dich anzumelden:\n<a href='" + magicLink + "'>" + magicLink
                             + "</a>"
@@ -394,10 +348,9 @@ public class WebSecurityConfig {
         }
 
         @Override
-        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-                FilterChain filterChain) throws ServletException, IOException {
+        protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
+                @NonNull FilterChain filterChain) throws ServletException, IOException {
 
-            // Filter nur für POST-Anfragen an "/ott/generate" anwenden
             if ("/ott/generate".equals(request.getRequestURI()) && "POST".equalsIgnoreCase(request.getMethod())) {
                 try (BufferedReader reader = request.getReader()) {
                     StringBuilder requestBodyBuilder = new StringBuilder();
@@ -422,7 +375,6 @@ public class WebSecurityConfig {
                         return;
                     }
 
-                    // Erstelle das Payload-Format, das der CaptchaController erwartet
                     String payload = "{\"payload\":\"" + captchaRequest.getPow() + "\"}";
 
                     // Prüfe den "pow"-Wert
@@ -433,31 +385,13 @@ public class WebSecurityConfig {
                     }
                 }
             }
-            // Anfrage weiterreichen, wenn keine Prüfung nötig ist oder diese erfolgreich
-            // war
             filterChain.doFilter(request, response);
         }
 
-        // Hilfsklasse für das Parsen des JSON-Request-Bodys
+        @Data
         public static class CaptchaRequest {
             private String pow;
             private String username;
-
-            public String getPow() {
-                return pow;
-            }
-
-            public String getUsername() {
-                return username;
-            }
-
-            public void setPow(String pow) {
-                this.pow = pow;
-            }
-
-            public void setUsername(String hsMail) {
-                this.username = hsMail;
-            }
         }
     }
 }

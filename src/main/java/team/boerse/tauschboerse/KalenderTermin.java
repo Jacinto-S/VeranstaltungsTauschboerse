@@ -6,7 +6,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import lombok.Getter;
+import lombok.Setter;
 
+@Setter
+@Getter
 @Entity
 public class KalenderTermin {
 
@@ -34,59 +38,12 @@ public class KalenderTermin {
     public KalenderTermin() {
     }
 
-    public Date getStart() {
-        return start;
-    }
-
-    public void setStart(Date start) {
-        this.start = start;
-    }
-
-    public Date getEnd() {
-        return end;
-    }
-
-    public void setEnd(Date end) {
-        this.end = end;
-    }
-
-    public String getName() {
-        return name;
-    }
-
+    // Sonderbehandlung für Namen mit (SU-...), diese werden zu (S-...) umgewandelt
     public void setName(String name) {
         if (name != null && name.indexOf("(SU-") != -1) {
             name = name.replace("(SU-", "(S-");
         }
         this.name = name;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public String getLocation() {
-        return location;
-    }
-
-    public void setLocation(String location) {
-        this.location = location;
-    }
-
-    public KalenderTerminType getType() {
-        return type;
-    }
-
-    public void setType(KalenderTerminType type) {
-        this.type = type;
-    }
-
-    public long getId() {
-        return id;
     }
 
 }

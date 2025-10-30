@@ -3,6 +3,7 @@ package team.boerse.tauschboerse.webauthn; // Paket anpassen
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import org.slf4j.Logger;
@@ -12,6 +13,7 @@ import org.springframework.security.web.webauthn.api.Bytes;
 import org.springframework.security.web.webauthn.api.CredentialRecord;
 import org.springframework.security.web.webauthn.api.PublicKeyCose;
 import org.springframework.security.web.webauthn.api.PublicKeyCredentialType;
+import org.springframework.security.web.webauthn.api.PublicKeyCredentialUserEntity;
 import org.springframework.security.web.webauthn.management.UserCredentialRepository;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
+import team.boerse.tauschboerse.User;
+import team.boerse.tauschboerse.UserRepository;
+import team.boerse.tauschboerse.audit.AuditEventType;
+import team.boerse.tauschboerse.audit.AuditService;
 
 import java.io.Serializable;
 import java.time.Instant;
@@ -27,9 +33,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 
 @Repository
 @Transactional
+@RequiredArgsConstructor
 public class JpaUserCredentialRepository implements UserCredentialRepository {
 
     private static final Logger logger = LoggerFactory.getLogger(JpaUserCredentialRepository.class);
@@ -37,18 +45,46 @@ public class JpaUserCredentialRepository implements UserCredentialRepository {
     @PersistenceContext
     private EntityManager entityManager;
 
+    private final AuditService auditService;
+
+    private final UserRepository userRepository;
+
+    private final JpaPublicKeyCredentialUserEntityRepository userEntityRepository;
+
     @Override
     public void save(CredentialRecord credentialRecord) {
-        // Erzeuge aus dem CredentialRecord ein serialisierbares Objekt.
         SerializableCredentialRecordImpl serializableRecord = SerializableCredentialRecordImpl.from(credentialRecord);
         JpaCredentialRecord entity = JpaCredentialRecord.from(serializableRecord);
-        // Existiert bereits ein Eintrag? Dann merge, sonst persist.
         JpaCredentialRecord existing = entityManager.find(JpaCredentialRecord.class,
                 credentialRecord.getCredentialId());
-        if (existing == null) {
+        boolean isNewCredential = existing == null;
+
+        if (isNewCredential) {
             entityManager.persist(entity);
         } else {
             entityManager.merge(entity);
+        }
+
+        if (isNewCredential) {
+            try {
+                if (auditService != null && userRepository != null && userEntityRepository != null) {
+                    Bytes userIdBytes = credentialRecord.getUserEntityUserId();
+                    PublicKeyCredentialUserEntity userEntity = userEntityRepository.findById(userIdBytes);
+                    if (userEntity != null) {
+                        User user = userRepository.findByHsMail(userEntity.getName()).orElse(null);
+                        if (user != null) {
+                            String credentialLabel = credentialRecord.getLabel() != null ? credentialRecord.getLabel()
+                                    : "Unnamed";
+                            auditService.logEvent(user.getId(), AuditEventType.PASSKEY_CREATED,
+                                    "Passkey created: " + credentialLabel);
+                            user.setUsesPasskeys(true);
+                            userRepository.save(user);
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                logger.warn("Failed to write audit log for PASSKEY_CREATED", ex);
+            }
         }
     }
 
@@ -81,20 +117,17 @@ public class JpaUserCredentialRepository implements UserCredentialRepository {
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor
+    @Getter
     public static class SerializableCredentialRecordImpl implements CredentialRecord, Serializable {
 
         private static final long serialVersionUID = 1L;
 
         private PublicKeyCredentialType credentialType;
         private Bytes credentialId;
-        /**
-         * Serialisierbarer Wrapper, da {@link PublicKeyCose} nicht direkt
-         * serialisierbar ist.
-         */
         private SerializablePublicKeyCose publicKey;
         private long signatureCount;
         private boolean uvInitialized;
-        private Set<AuthenticatorTransport> transports = new HashSet<>();
+        private Set<AuthenticatorTransport> transports;
         private boolean backupEligible;
         private boolean backupState;
         private Bytes userEntityUserId;
@@ -104,13 +137,6 @@ public class JpaUserCredentialRepository implements UserCredentialRepository {
         private Instant lastUsed;
         private Instant created;
 
-        /**
-         * Wandelt ein bestehendes {@link CredentialRecord} in ein
-         * {@link SerializableCredentialRecordImpl} um.
-         *
-         * @param record das umzuwandelnde CredentialRecord
-         * @return die serialisierbare Implementierung des CredentialRecord
-         */
         public static SerializableCredentialRecordImpl from(CredentialRecord record) {
             return SerializableCredentialRecordImpl.builder()
                     .credentialType(record.getCredentialType())
@@ -131,29 +157,16 @@ public class JpaUserCredentialRepository implements UserCredentialRepository {
                     .build();
         }
 
-        /**
-         * Wandelt diese SerializableCredentialRecordImpl in ein CredentialRecord um.
-         * Da diese Klasse bereits CredentialRecord implementiert, wird hier "this"
-         * zurückgegeben.
-         *
-         * @return ein CredentialRecord, das diesem Objekt entspricht.
-         */
         public CredentialRecord toCredentialRecord() {
             return this;
         }
 
-        /**
-         * Gibt die Transports als unveränderliche Menge zurück.
-         */
         @Override
         public Set<AuthenticatorTransport> getTransports() {
             return Collections.unmodifiableSet(this.transports);
         }
     }
 
-    /**
-     * Serialisierbarer Wrapper für {@link PublicKeyCose}.
-     */
     @Data
     @AllArgsConstructor
     public static class SerializablePublicKeyCose implements PublicKeyCose, Serializable {

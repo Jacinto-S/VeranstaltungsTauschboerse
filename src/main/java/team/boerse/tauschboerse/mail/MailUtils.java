@@ -1,8 +1,11 @@
 package team.boerse.tauschboerse.mail;
 
 import java.io.File;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
 import org.slf4j.Logger;
@@ -27,19 +30,45 @@ public class MailUtils {
 
     private static Logger logger = LoggerFactory.getLogger(MailUtils.class);
 
+    public static String createMailtoLink(String to, java.util.List<String> cc, String subject, String body) {
+        StringBuilder mailto = new StringBuilder("mailto:");
+        try {
+            if (to != null && !to.isBlank()) {
+                mailto.append(URLEncoder.encode(to, StandardCharsets.UTF_8.name())
+                        .replace("+", "%20"));
+            }
+            List<String> params = new java.util.ArrayList<>();
+            if (subject != null && !subject.isBlank()) {
+                params.add("subject="
+                        + URLEncoder.encode(subject, StandardCharsets.UTF_8.name())
+                                .replace("+", "%20"));
+            }
+            if (cc != null && !cc.isEmpty()) {
+                String ccJoined = cc.stream()
+                        .filter(s -> s != null && !s.isBlank())
+                        .collect(java.util.stream.Collectors.joining(","));
+                if (!ccJoined.isBlank()) {
+                    params.add("cc="
+                            + URLEncoder.encode(ccJoined, StandardCharsets.UTF_8.name())
+                                    .replace("+", "%20"));
+                }
+            }
+            if (body != null && !body.isBlank()) {
+                String normalized = body.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n");
+                params.add("body=" + URLEncoder
+                        .encode(normalized, StandardCharsets.UTF_8.name()).replace("+", "%20"));
+            }
+            if (!params.isEmpty()) {
+                mailto.append("?").append(String.join("&", params));
+            }
+        } catch (java.io.UnsupportedEncodingException e) {// Should never happen
+        }
+        return mailto.toString();
+    }
+
     public static void sendMail(String to, String cc, String subject, String text) {
         logger.info(String.format("Sending mail to %s with subject %s and text %s", to, subject, text));
         mails.add(new Mail(to, cc, subject, text));
-
-        Thread thread = new Thread(() -> {
-            try {
-                sendMails();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
-        thread.start();
-        lastCheck = System.currentTimeMillis();
 
     }
 
@@ -47,9 +76,9 @@ public class MailUtils {
     private static boolean isSending = false;
     private static long lastCheck = 0;
 
-    @Scheduled(fixedDelay = 2000)
+    @Scheduled(fixedDelay = 100)
     public static void sendMails() {
-        if (mails.isEmpty() || isSending || (System.currentTimeMillis() - lastCheck < 1000))
+        if (mails.isEmpty() || isSending || (System.currentTimeMillis() - lastCheck < 100))
             return;
         Mail mail = mails.remove(0);
         isSending = true;
@@ -59,6 +88,7 @@ public class MailUtils {
             e.printStackTrace();
         }
         isSending = false;
+        lastCheck = System.currentTimeMillis();
     }
 
     private static void sendEmail(String recipient, String cc, String subject, String text) {

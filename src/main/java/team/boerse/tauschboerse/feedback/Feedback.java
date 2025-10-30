@@ -9,8 +9,12 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import lombok.Getter;
+import lombok.Setter;
 import team.boerse.tauschboerse.User;
 
+@Setter
+@Getter
 @Entity
 public class Feedback {
 
@@ -45,30 +49,6 @@ public class Feedback {
         this.feedback = feedback;
         this.createDate = new Date();
         this.rating = rating;
-    }
-
-    public Date getCreateDate() {
-        return createDate;
-    }
-
-    public String getFeedback() {
-        return feedback;
-    }
-
-    public long getId() {
-        return id;
-    }
-
-    public int getRating() {
-        return rating;
-    }
-
-    public long getCreator() {
-        return creator;
-    }
-
-    public boolean isPublic() {
-        return isPublic;
     }
 
 }
