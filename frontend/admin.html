@@ -70,8 +70,8 @@
         }
 
         .offcanvas {
-            background-color: #1f2a34;
-            color: #f1f5f9;
+            background-color: #1f2a34 !important;
+            color: #f1f5f9 !important;
         }
 
         .offcanvas-header {
@@ -372,6 +372,12 @@
 
         .text-warning {
             color: #ffc107 !important;
+        }
+
+        @media (max-width: 726px) {
+            #settingsActionButtons {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
@@ -885,7 +891,7 @@
                             </div>
 
                             <hr class="my-3">
-                            <div class="d-flex gap-2">
+                            <div class="d-flex gap-2" id="settingsActionButtons">
                                 <button class="btn btn-primary" id="saveSettingsBtn">
                                     <i class="bi bi-save me-2"></i>Einstellungen speichern
                                 </button>

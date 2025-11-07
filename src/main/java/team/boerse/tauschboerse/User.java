@@ -49,7 +49,7 @@ public class User {
     @Column(nullable = true)
     private Date lastActivityDate;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "studiengang_id", nullable = true)
     private Studiengang studiengang;
 
