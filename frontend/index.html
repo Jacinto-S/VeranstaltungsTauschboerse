@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="de" data-bs-theme="dark">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tauschbörse</title>
+
+    <script type="module" src="./js/main.js" blocking="render" fetchpriority="high"></script>
+    <link rel="stylesheet" href="./scss/styles.scss">
+    <link rel="stylesheet" href="./css/main.css">
+    <link rel="shortcut icon" href="icon.webp">
+</head>
+
+<body>
+    <nav class="navbar sticky-top navbar-expand-sm bg-body-tertiary" style="z-index: 1200;">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#"><img src="icon.webp" alt="Logo" width="30" height="30" class="">
+                Tauschbörse</a>
+            <button class="btn btn-sm btn-secondary d-sm-none ms-auto me-2" id="loginshowbtn-mobile"
+                style="cursor: pointer; display: none;">
+                <span id="loginshowbtntext-mobile">Anmelden</span>
+            </button>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown"
+                aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNavDropdown">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#faqs">FAQ</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#bewertungen">Bewertungen</a>
+                    </li>
+                    <li class="nav-item" id="admin-link" style="display: none;">
+                        <a class="nav-link active" href="./admin.html">Administration</a>
+                    </li>
+                    <!-- Ausloggen-Button für Mobile (im Menü versteckt) -->
+                    <li class="nav-item d-sm-none" id="loginshowbtn-menu-mobile" style="display: none;">
+                        <a class="nav-link active" style="cursor: pointer;" id="loginshowbtntext-menu-mobile">
+                            Ausloggen
+                        </a>
+                    </li>
+                    <!-- Anmelde-Button für Desktop -->
+                    <li class="nav-item d-none d-sm-block" id="loginshowbtn">
+                        <a class="nav-link active" style="cursor: pointer;" id="loginshowbtntext">
+                            Anmelden
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <script>
+        var loginshowbtn = document.getElementById('loginshowbtn');
+        var loginshowbtntext = document.getElementById('loginshowbtntext');
+        var loginshowbtnMobile = document.getElementById('loginshowbtn-mobile');
+        var loginshowbtntextMobile = document.getElementById('loginshowbtntext-mobile');
+        var loginshowbtnMenuMobile = document.getElementById('loginshowbtn-menu-mobile');
+
+        function updateLoginButtonText() {
+            var isLoggedIn = localStorage.getItem('loggedIn') === 'true';
+            var text = isLoggedIn ? "Ausloggen" : "Anmelden";
+
+            if (loginshowbtntext) {
+                loginshowbtntext.innerText = text;
+            }
+
+            if (loginshowbtnMobile) {
+                if (isLoggedIn) {
+                    loginshowbtnMobile.style.display = 'none';
+                } else {
+                    loginshowbtnMobile.style.display = 'inline-block';
+                }
+            }
+
+            if (loginshowbtnMenuMobile) {
+                if (isLoggedIn) {
+                    loginshowbtnMenuMobile.style.display = 'block';
+                } else {
+                    loginshowbtnMenuMobile.style.display = 'none';
+                }
+            }
+        }
+
+        updateLoginButtonText();
+    </script>
+
+
+
+    <div class="container">
+        <h1 id="title" style="margin-top: 12px;text-align: center;">Wochenkalender</h1>
+        <br id="titlebr">
+        <script>
+            if (localStorage.getItem('loggedIn') === 'true' && localStorage.getItem('whoami') != null) {
+                var whoamidata = localStorage.getItem('whoami');
+                document.getElementById('title').innerText = "Wochenkalender für " + whoamidata;
+            }
+        </script>
+    </div>
+    <div id="calendarContainer" class="container">
+        <div class="week-calendar" id="weekCalendar" style="user-select: none;">
+            <!-- Platzhalter um Layoutshift zu verhindern -->
+            <div class="time-scale">
+                <div style="top: 3.84615%;">8:00</div>
+                <div style="top: 11.1305%;">9:00</div>
+                <div style="top: 18.4149%;">10:00</div>
+                <div style="top: 25.6993%;">11:00</div>
+                <div style="top: 32.9837%;">12:00</div>
+                <div style="top: 40.2681%;">13:00</div>
+                <div style="top: 47.5524%;">14:00</div>
+                <div style="top: 54.8368%;">15:00</div>
+                <div style="top: 62.1212%;">16:00</div>
+                <div style="top: 69.4056%;">17:00</div>
+                <div style="top: 76.69%;">18:00</div>
+                <div style="top: 83.9744%;">19:00</div>
+                <div style="top: 91.2587%;">20:00</div>
+                <div style="top: 98.5431%;">21:00</div>
+            </div>
+            <div class="day">
+                <div class="day-header">Mo</div>
+            </div>
+            <div class="day">
+                <div class="day-header">Di</div>
+            </div>
+            <div class="day">
+                <div class="day-header">Mi</div>
+                <div class="bg-secondary text-white" id="uploadHint"
+                    onclick="document.getElementById('fileupload').click();"
+                    style="border-radius: 10px;width: 170px;padding: 5px;display: none;top: 45%;text-align: center;position: absolute;left: calc(50%)!important;transform: translate(-50%, -50%);cursor: pointer;">
+                    ICS Datei hochladen <br>oder hereinziehen
+                </div>
+            </div>
+            <div class="day">
+                <div class="day-header">Do</div>
+            </div>
+            <div class="day">
+                <div class="day-header">Fr</div>
+            </div>
+        </div>
+        <p style="text-align: center;margin-top: 9px;margin-bottom: 6px;min-height: 48px;" id="stateInfo">
+            Du musst deinen Stundenplan hochladen, um Angebote erstellen zu können (siehe unten).
+        </p>
+        <script>
+            if (localStorage.getItem('loggedIn') === 'true') {
+                document.getElementById('stateInfo').innerText = "Klicke einen Termin an, um ein Tauschangebot zu erstellen oder zu suchen.";
+            }
+        </script>
+        <button class="btn btn-primary sticky-bottom" style="visibility: hidden;" id="confirmOffer" disabled>Angebot
+            erstellen</button>
+
+    </div>
+    <div class="container">
+        <br>
+
+        <h2 id="calendarupload">Kalender hochladen</h2>
+        <p>Bitte lade deinen Stundenplan von <a id="aorurl"
+                href="#">https://aor.cs.hs-rm.de/plans.ics?user_plan=true</a>
+            als .ics Datei hoch <span style="opacity: 0.7;font-size: small;">(Tipps in den <a
+                    href="#faqs">FAQs</a>)</span>
+        </p>
+
+
+        <div class="input-group mb-3" style="max-width: 500px;margin-bottom: 0.1rem!important;">
+            <input type="file" class="form-control" id="fileupload" accept=".ics">
+        </div>
+        <span style="opacity: 0.7;font-size: small;">Vorsicht! Beim Hochladen eines neuen Kalenders
+            werden alle deine Angebote
+            entfernt!</span>
+
+        <div class="modal fade" id="loginModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="loginModalTitle">Login</h4>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+                    </div>
+                    <div class="modal-body" id="loginmodalbody">
+                        <p>
+                            Um Angebote zu erstellen oder anzusehen, musst du dich anmelden. Eine vorherige
+                            Registrierung ist nicht nötig.
+                            Bitte lösche Angebote, die du nicht mehr benötigst und halte dich an die Regeln.
+                        </p>
+                        <div class="input-group mb-3" style="max-width: 500px;" id="MailBoxGroup">
+                            <form>
+                                <label for="email" class="form-label">Registrieren oder einloggen mit
+                                    Hochschul-E-Mail</label>
+
+                                <div class="input-group mb-3">
+                                    <input type="email" class="form-control" id="email" name="username"
+                                        autocomplete="username webauthn" placeholder="email@student.hs-rm.de">
+                                    <button id="submitemail" class="btn btn-primary">Absenden</button>
+
+                                </div>
+                                <label for="captcha" class="form-label">Sicherheitsüberprüfung</label>
+                                <altcha-widget id="pow-login" challengeurl="/challenge" auto="onfocus"
+                                    floatinganchor="submitemail" refetchonexpire="true" hidefooter delay="200"
+                                    expire="120000" hidelogo></altcha-widget>
+
+                            </form>
+
+                        </div>
+                        <p>oder Anmelden mit Passkey. Passkeys sind erst <span style="font-weight: bold;">nach</span>
+                            der ersten Anmeldung verfügbar.</p>
+                        <button id="passkey-login-button" class="btn btn-primary">Passkey
+                            verwenden</button>
+
+                        <div style="display: none;" id="betaLoginBox">
+                            <br>
+                            <div class="input-group mb-3" style="max-width: 500px;" id="BetaBoxGroup">
+                                <input type="number" min="1" max="100" id="demoLoginInput" class="form-control"
+                                    placeholder="Accountnummer 1-100">
+                                <button class="btn btn-primary" id="demoLogin">Demo-Beta-Zugang</button>
+                            </div>
+                        </div>
+
+                        <div style="display: none;" id="betaLoginBox">
+                            <p>Oder nutze den Demo-Beta-Zugang</p>
+                            <div class="input-group mb-3" style="max-width: 500px;" id="BetaBoxGroup">
+                                <input type="number" min="1" max="100" id="demoLoginInput" class="form-control"
+                                    placeholder="Accountnummer 1-100">
+                                <button class="btn btn-primary" id="demoLogin">Demo-Beta-Zugang</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Studiengang-Auswahl Modal -->
+        <div class="modal fade" id="studiengangModal" tabindex="-1" aria-labelledby="studiengangModalLabel"
+            aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="studiengangModalLabel">Studiengang auswählen</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p>Bitte wähle deinen Studiengang aus. Diese Einstellung beeinflusst Vorschläge und
+                            Tauschpartner bei studiengangsgebundenen Veranstaltungen.</p>
+                        <select id="studiengangSelect" class="form-select">
+                            <option value="">Lade Studiengänge…</option>
+                        </select>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" id="saveStudiengangBtn">Speichern</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="feedbackModalTitle">Feedback einreichen</h4>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="feedbackModalBody">
+                        <p>Wie gefällt dir diese Seite?</p>
+                        <textarea class="form-control" id="feedbackTextarea" rows="3"></textarea>
+                        <br>
+                        <p>Wie viele Sterne würdest du uns geben?</p>
+                        <select class="form-select" id="feedbackStars" aria-label="Default select example">
+                            <option selected value="5">⭐⭐⭐⭐⭐</option>
+                            <option value="4">⭐⭐⭐⭐</option>
+                            <option value="3">⭐⭐⭐</option>
+                            <option value="2">⭐⭐</option>
+                            <option value="1">⭐</option>
+                        </select>
+                        <br>
+                        <input class="form-check-input" type="checkbox" role="switch" id="isPrivateFeedback">
+                        <label class="form-check-label" for="isPrivateFeedback"> Vertraulich</label>
+
+
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                        <button type="button" class="btn btn-primary" id="feedbackSend">Senden</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="angebotErstelltModal" tabindex="-1" aria-labelledby="exampleModalLabel"
+            style="z-index: 1299;" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="angebotErstelltModalTitle">Angebot erstellt</h4>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="angebotErstelltModalBody">
+                        <p>Dein Angebot wurde erstellt. Wir drücken dir die Daumen! Du kannst zum <span
+                                style="font-weight: bold;">Erfolg</span> beitragen,
+                            indem du die Webseite mit anderen teilst.</p>
+
+                        <button class="btn btn-success" id="sharebtn">Jetzt teilen</button>
+                        <button class="btn btn-primary" id="copylink">Link
+                            kopieren</button>
+
+
+
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <p style="display: block;margin-top: 10px;">
+            <button class="btn btn-danger" id="removeAllOvers" style="visibility: hidden; display: inline;">Alle
+                Angebote
+                löschen</button>
+
+        </p>
+        <div id="system-mode-info" class="alert alert-light"
+            style="display: none; max-width: 700px; margin-bottom: 1rem;">
+            <div id="system-mode-info-text"></div>
+        </div>
+
+        <div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="exampleModalLabel">Herzlichen Glückwunsch!</h4>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="modalbody">
+                        <p> Du hast ein Angebot angenommen. </p>
+                        <p> Bitte warte, bis die Verarbeitung abgeschlossen ist. </p>
+                        <div class="progress">
+                            <div class="progress-bar" role="progressbar" id="fakeprogress" style="width: 0%;"
+                                aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">25%</div>
+                        </div>
+
+
+
+
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        <br>
+        <br>
+        <h2 id="faqs">FAQ</h2>
+        <div class="accordion" id="faqAccordion">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingOne">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+                        Wie bekomme ich meinen Stundenplan als .ics Datei?
+                    </button>
+                </h2>
+                <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne"
+                    data-bs-parent="#faqAccordion">
+                    <div class="accordion-body">
+                        Kopiere dir den Link <a id="aorurl3"
+                            href="#">https://aor.cs.hs-rm.de/plans.ics?user_plan=true</a>
+                        in die Adresszeile. Dort
+                        meldest du dich an und bekommst die Datei direkt heruntergeladen. <br>
+                        Anmerkung: Die Hochschulseite erlaubt direkte Links leider nicht, daher musst du den Link selbst
+                        in die Adresszeile einfügen.
+                        <br><br>
+                        <video src="uploadCalendarTutorial.webm" preload="none" controls style="width: 100%;"></video>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingTwo">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
+                        Wie kann ich ein Angebot erstellen oder nach Angeboten suchen?
+                    </button>
+                </h2>
+                <div id="collapseTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo"
+                    data-bs-parent="#faqAccordion">
+                    <div class="accordion-body">
+                        Wenn du deinen Stundenplan hochgeladen hast, kannst du auf die einzelnen Veranstaltungstermine
+                        klicken.<br>
+                        Dir wird dann angezeigt, ob es bereits Tauschangebote für diesen Termin gibt. Nachdem das
+                        Angebot erstellt wurde, wird es für andere
+                        sichtbar
+                        und sie können darauf reagieren. <br><br> Wenn du ein Angebot verbindlich annimmst, wird der
+                        oder die
+                        Erstellerin
+                        benachrichtigt
+                        und ihr könnt euch absprechen. Das Angebot wird
+                        automatisch entfernt.
+                        Du kannst deine Angebote jederzeit über den <a href="#calendarupload">Knopf</a> "alle Angebote
+                        löschen" entfernen.
+                        <br><br>
+                        <span style="font-weight: bold;">Bitte prüfe ob die Veranstaltungstermine korrekt sind, bevor du
+                            ein Angebot erstellst oder akzeptierst.</span>
+                        <br><br>
+                        <video src="TerminTauschenTutorial.webm" preload="none" controls style="width: 100%;"></video>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingThree">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
+                        Woher bekomme ich die anderen Veranstaltungstermine?
+                    </button>
+                </h2>
+                <div id="collapseThree" class="accordion-collapse collapse" aria-labelledby="headingThree"
+                    data-bs-parent="#faqAccordion">
+                    <div class="accordion-body">
+                        Auf <a id="aorurl2" href="#">https://aor.cs.hs-rm.de/plans</a> findest du die Masterpläne
+                        für Informatikstudiengänge unter "Aktuelle Studiengangspläne". <br>
+                        Anmerkung: Die Hochschulseite erlaubt direkte Links leider nicht, daher musst du den Link selbst
+                        in die Adresszeile einfügen 😔
+                        <br><br>
+                        <video src="GetTerminOverview.webm" preload="none" controls style="width: 100%;"></video>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingFour">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseFour" aria-expanded="false" aria-controls="collapseFour">
+                        Warum sollte ich zusätzlich meine private E-Mail-Adresse angeben?
+                    </button>
+                </h2>
+
+
+                <div id="collapseFour" class="accordion-collapse collapse" aria-labelledby="headingFour"
+                    data-bs-parent="#faqAccordion">
+                    <div class="accordion-body">
+                        Wenn du deine private E-Mail-Adresse angibst, können wir dich zusätzlich privat benachrichtigen,
+                        wenn jemand auf dein Angebot reagiert. Deine E-Mail-Adresse wird mit niemandem geteilt. Wenn du
+                        keine private
+                        E-Mail-Adresse angibst, kannst du trotzdem Angebote
+                        erstellen und annehmen.
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingFive">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseFive" aria-expanded="false" aria-controls="collapseFive">
+                        Ich habe eine Tauschperson gefunden. Wie geht es jetzt weiter?
+                    </button>
+                </h2>
+
+
+                <div id="collapseFive" class="accordion-collapse collapse" aria-labelledby="headingFive"
+                    data-bs-parent="#faqAccordion">
+                    <div class="accordion-body">
+                        Ihr solltet jetzt beide eine E-Mail von uns bekommen haben. Darin finden sich die jeweiligen
+                        Kontaktinformationen.
+                        Ihr könnt jetzt zusammen eure Kursleitung anschreiben oder ansprechen, damit diese euch
+                        tauscht.
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingSix">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseSix" aria-expanded="false" aria-controls="collapseSix">
+                        Was wenn sich mein Tauschpartner nicht meldet oder ablehnt?
+                    </button>
+                </h2>
+
+
+                <div id="collapseSix" class="accordion-collapse collapse" aria-labelledby="headingSix"
+                    data-bs-parent="#faqAccordion">
+                    <div class="accordion-body">
+                        Wenn du Probleme mit deinem Tauschpartner hast und noch einmal tauschen möchtest, kannst du den
+                        Prozess von vorne starten.<br>
+                        Dazu lädst du einfach erneut deinen Stundenplan hoch und wählst einen neuen Tauschtermin
+                        aus.<br>
+                        Beachte aber bitte, dass dein Tauschpartner sein Leben nicht im E-Mail-Postfach verbringt. Gib
+                        ihm etwas Zeit, um dir zu antworten 😊
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingEight">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseEight" aria-expanded="false" aria-controls="collapseEight">
+                        Wie funktioniert der neue 3er-Zirkeltausch?
+                    </button>
+                </h2>
+
+                <div id="collapseEight" class="accordion-collapse collapse" aria-labelledby="headingEight"
+                    data-bs-parent="#faqAccordion">
+                    <div class="accordion-body">
+
+                        <p>Mit dem neuen <strong>3er-Zirkeltausch</strong> werden Tauschvorgänge effizienter und fairer
+                            gestaltet.
+                            Im Gegensatz zum bisherigen Direkttausch (1:1), bei dem Angebote sofort angenommen werden
+                            konnten,
+                            sammelt das System nun alle Tauschwünsche und wertet sie in <strong>regelmäßigen
+                                Runden</strong> aus.
+                            Dadurch können auch komplexe Tauschketten erkannt werden, bei denen drei Personen
+                            gegenseitig ihre
+                            gewünschten Plätze tauschen.</p>
+
+                        <h5 class="mt-3">Wie läuft eine Runde ab?</h5>
+                        <ul>
+                            <li>Du trägst wie gewohnt deine <strong>Tauschwünsche</strong> ein (z. B. von Kurs A auf
+                                Kurs B).</li>
+                            <li>Alle Wünsche werden bis zum nächsten <strong>Auswertungszeitpunkt</strong> gesammelt.
+                            </li>
+                            <li>Das System prüft dann automatisch, welche Kombinationen von Studierenden einen
+                                vollständigen Tausch ermöglichen. Sowohl mit 2er- als auch 3er-Konstellationen.</li>
+                            <li>Nach Abschluss der Runde erhalten alle erfolgreich vermittelten Studierenden eine
+                                <strong>E-Mail mit den Ergebnissen</strong>.
+                            </li>
+                        </ul>
+
+                        <h5 class="mt-3">Welche Vorteile hat das?</h5>
+
+                        <strong>Höhere Vermittlungsquote:</strong> Erste Auswertungen zeigen, dass mit dem neuen
+                        3er-Zirkeltausch je nach Verteilung der Wünsche deutlich mehr Studierende erfolgreich
+                        vermittelt werden können als bisher. In Simulationen lag die Vermittlungsquote im
+                        Durchschnitt <strong> etwa 15 bis 20 Prozentpunkte</strong> höher als beim reinen Direkttausch.
+
+
+                        <h5 class="mt-3">Gibt es auch Nachteile?</h5>
+                        <strong>Abhängigkeit vom Zeitplan:</strong> Neue Matches entstehen nur zu festgelegten
+                        Zeitpunkten (In der Regel täglich).
+                        <h5 class="mt-3">Warum wurde das System geändert?</h5>
+                        <p>Der bisherige Direkttausch war zwar schnell, führte aber häufig zu vielen offenen Anfragen
+                            ohne Ergebnis.
+                            Einige Studierende haben versucht, 3er-Tausche manuell über mehrere Zwischenschritte
+                            abzuwickeln.
+                            Das war jedoch aufwendig, fehleranfällig und oft nur mit viel Koordination möglich.
+                            Mit dem neuen rundenbasierten System werden solche Tauschketten automatisch erkannt und
+                            umgesetzt.
+                            Dadurch können mehr Studierende erfolgreich vermittelt werden, und der Ablauf ist einfacher,
+                            fairer und besser planbar.</p>
+                        <h5 class="mt-3">Für ADS und AFS Fans</h5>
+                        <p>Hinter dem neuen 3er-Zirkeltausch steckt ein algorithmisches Problem, das aus theoretischer
+                            Sicht nicht ohne ist.
+                            Mathematisch handelt es sich um eine Variante des <strong>Maximum Set Packing</strong>. Also
+                            ein
+                            klassisches <strong>NP-schweres Problem</strong>.
+                            Das bedeutet, dass es keine bekannte Methode gibt, die in allen Fällen in kurzer Zeit
+                            garantiert die optimale Lösung findet.</p>
+
+                        <p>Das System baut aus allen eingereichten Tauschwünschen zunächst einen gerichteten
+                            <strong>Graphen</strong>, in dem jeder Knoten ein Angebot und jede Kante eine mögliche
+                            Tauschkombination repräsentiert.
+                            Dann werden alle möglichen <strong>2er- und 3er-Zyklen</strong> gesucht.
+                            Die Kombination der Zyklen erfolgt über eine <strong>Backtracking-Suche</strong>.
+                            Falls die Suche zu groß wird, greift ein <strong>Greedy-Fallback</strong>, der die besten
+                            disjunkten Zyklen nach einer Heuristik auswählt.
+                        </p>
+
+
+
+
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingSeven">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseSeven" aria-expanded="false" aria-controls="collapseSeven">
+                        Informationen zur Plattform
+                    </button>
+                </h2>
+
+                <div id="collapseSeven" class="accordion-collapse collapse" aria-labelledby="headingSeven"
+                    data-bs-parent="#faqAccordion">
+                    <div class="accordion-body">
+                        Diese inoffizielle Tauschbörse für Lehrveranstaltungen richtet sich an alle Informatikstudenten
+                        der
+                        Hochschule Rhein Main (HSRM). Speziell für die Studiengänge Medieninformatik,
+                        Wirtschaftsinformatik,
+                        Angewandte Informatik und Technische Informatik bietet diese Plattform eine einfache
+                        Möglichkeit, Lehrveranstaltungen zu tauschen. Wenn du mehr über die Verarbeitung deiner Daten
+                        erfahren willst, schaue <a href="Impressum und Datenschutz.html">hier</a> vorbei.
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingChangelog">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseChangelog" aria-expanded="false" aria-controls="collapseChangelog">
+                        Was ist neu? (Changelog)
+                    </button>
+                </h2>
+                <div id="collapseChangelog" class="accordion-collapse collapse" aria-labelledby="headingChangelog"
+                    data-bs-parent="#faqAccordion">
+                    <div class="accordion-body">
+                        <p>Vor SS25:</p>
+                        <ul>
+                            <li><span style="font-weight: bold;">Passkeys:</span> Du kannst dich jetzt nach dem ersten
+                                Login noch schneller und sicherer anmelden.</li>
+                            <li><span style="font-weight: bold;">Formulierungsvorschläge:</span> Wir helfen dir mit
+                                Textbausteinen beim Anschreiben deiner Kursleitung.</li>
+                            <li><span style="font-weight: bold;">Direkte Tauschoptionen:</span> Verfügbare
+                                Tauschangebote werden sofort angezeigt, ohne dass du erst einen Termin auswählen musst.
+                            </li>
+                            <li><span style="font-weight: bold;">Überarbeitete Datenschutzseite:</span> Alle Infos zur
+                                Datenverarbeitung sind jetzt übersichtlicher zusammengestellt.</li>
+                            <li><span style="font-weight: bold;">Captcha beim Mail-Login:</span> Ein neues
+                                Captcha schützt die Anmeldung per Hochschul-E-Mail vor Bots.</li>
+                        </ul>
+                        <p>Ab SS26:</p>
+                        <ul>
+                            <li><span style="font-weight: bold;">Neuer 3er-Zirkeltausch:</span> Ab diesem Semester
+                                werden Tauschwünsche gesammelt und in <strong>Vermittlungsrunden</strong>
+                                automatisch ausgewertet. Dabei können nicht nur 2er-, sondern auch
+                                <strong>3er-Tausche</strong> entstehen. So steigen deine Chancen auf einen
+                                passenden Platz erheblich.
+                            </li>
+                            <li><span style="font-weight: bold;">Rundenbasierte Vermittlung:</span> Anstatt direkt
+                                Angebote anzunehmen, gibst du einfach deine Tauschwünsche an. Das System vermittelt
+                                dann zu festgelegten Zeitpunkten automatisch optimale Kombinationen.</li>
+
+                            <li><span style="font-weight: bold;">Automatische Benachrichtigung:</span> Nach jeder
+                                Runde erhältst du eine E-Mail, sobald du erfolgreich vermittelt wurdest. Beim
+                                3er-Tausch sind in der Mail direkt alle beteiligten Studierenden verknüpft.</li>
+
+                            <li><span style="font-weight: bold;">Mehr Fairness & Effizienz:</span> Durch die
+                                automatische Vermittlung werden mehr Wünsche erfüllt und Überschneidungen vermieden.
+                                Das System berücksichtigt dabei sowohl 2er- als auch 3er-Tausche.</li>
+                        </ul>
+
+                    </div>
+                </div>
+            </div>
+
+        </div><br><br>
+        <h2 id="bewertungen" style="margin-bottom: 13px;">
+            Bewertungen
+        </h2>
+
+        <div class="container">
+            <div id="ratings">
+
+            </div>
+            <br>
+
+
+            <button class="btn btn-primary" data-bs-toggle="modal" id="feedbackbtn" style="display: none;"
+                data-bs-target="#feedbackModal">Feedback geben</button>
+            <button class="btn btn-outline-primary" style="border: none;" id="newFeedback"
+                data-bs-target="#feedbackModal"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                    fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z" />
+                    <path
+                        d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466" />
+                </svg></button>
+        </div>
+
+
+
+
+    </div>
+    <br><br>
+    <div class="container">
+
+
+        <div id="privateMailBox" style="display: none;">
+            <h2>Einstellungen</h2>
+            <div id="sgSettings" style="display:none;">
+                <label class="form-label mt-3">Mein Studiengang</label>
+                <div class="input-group" style="max-width: 500px;">
+                    <select class="form-select" id="studiengangSettingsSelect">
+                        <option value="">Lade…</option>
+                    </select>
+                    <button class="btn btn-outline-primary" id="saveStudiengangSettings">Speichern</button>
+                </div>
+                <small class="text-muted">Achtung: Beim Wechsel werden deine Angebote gelöscht.</small>
+            </div>
+            <br>
+            <span>Private E-Mail-Adresse <span style="opacity: 0.7;font-size: small;">(Infos in den FAQs)</span></span>
+            <div class="input-group" style="max-width: 500px;">
+                <input type="text" class="form-control" id="private-mail" placeholder="Private E-Mail-Adresse">
+                <button class="btn btn-primary" id="save-private-mail">Löschen</button>
+            </div>
+            <br>
+
+
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-success" style="display: none;" id="createPasskey">Passkey hinzufügen</button>
+                <button class="btn btn-outline-secondary" style="display: none;" id="managePasskeysBtn">Passkeys
+                    verwalten</button>
+
+            </div>
+            <div id="sgSettings" style="display:none;">
+                <label class="form-label mt-3">Mein Studiengang</label>
+                <div class="input-group" style="max-width: 500px;">
+                    <select class="form-select" id="studiengangSettingsSelect">
+                        <option value="">Lade…</option>
+                    </select>
+                    <button class="btn btn-outline-primary" id="saveStudiengangSettings">Speichern</button>
+                </div>
+                <small class="text-muted">Achtung: Beim Wechsel werden dein Angebote gelöscht.</small>
+            </div>
+        </div>
+
+    </div>
+    <div class="modal fade" id="passkey-modal" tabindex="-1" aria-labelledby="passkey-modal-label" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 class="modal-title" id="passkey-modal-label">Passkey erstellen</h4>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <img src="passkey.jpg" alt="Passkey" class="passkey-image"
+                        style="width: 80%;height: auto;display: block;margin: 0 auto;">
+                    <br>
+                    <p>Mit einem Passkey kannst du dich jetzt schnell und sicher anmelden, ohne jedes Mal eine E-Mail zu
+                        benötigen.</p>
+                    <div class="mt-3" style="max-width: 480px; margin: 0 auto;">
+                        <label for="passkey-label-input" class="form-label">Bezeichnung für den Passkey</label>
+                        <input type="text" class="form-control" id="passkey-label-input" maxlength="120"
+                            placeholder="z.B. Android Handy" autocomplete="off">
+                        <div class="form-text">Damit kannst du den Passkey später leichter zuordnen.
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end mt-3">
+                        <button class="btn btn-primary" id="register-passkey">Jetzt Passkey erstellen</button>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Passkey-Management-Modal: Passkeys verwalten, on-demand laden -->
+    <div class="modal fade" id="passkey-manage-modal" tabindex="-1" aria-labelledby="passkey-manage-modal-label"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 class="modal-title" id="passkey-manage-modal-label">Passkeys verwalten</h4>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div style="max-width: 700px; margin: 0 auto;">
+                        <p class="text-secondary" id="passkeyEmptyState" style="display:none;">Du hast noch keinen
+                            Passkey erstellt.</p>
+                        <div class="list-group" id="passkeyList" style="border-radius: 8px; overflow: hidden;"></div>
+                    </div>
+                </div>
+                <div class="modal-footer d-flex justify-content-between">
+                    <button type="button" class="btn btn-success" id="manage-add-passkey">Passkey hinzufügen</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <hr style="margin-top: 100px;">
+
+
+    <div class="container" style="margin-bottom: 20px;">
+        <div style="text-align: center;">
+            <span>© 2024 Nico Klein und Jacinto Schwarzwälder • <a href="Impressum%20und%20Datenschutz.html">Impressum
+                    und Datenschutz</a></span> • Darkmode
+            <span class="form-switch"><input class="form-check-input" type="checkbox" role="switch"
+                    id="flexSwitchCheckDefault"></span>
+
+        </div>
+
+
+    </div>
+    <div class="toast bottom-0 end-0 opacity-100 position-fixed" role="alert" style="z-index: 1300;"
+        aria-live="assertive" id="MessageToast">
+        <div class="toast-header">
+            <strong class="me-auto" id="MessageTitle">Bootstrap</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body bg-body-tertiary" id="MessageBody">
+            Hello, world! This is a toast message.
+        </div>
+    </div>
+
+</body>
+
+</html>

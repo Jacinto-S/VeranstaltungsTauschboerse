@@ -1,0 +1,32 @@
+{
+  "name": "vite-project",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview",
+    "copyToSpringWin": "npm run build && xcopy /E /I /Y dist\\* ..\\src\\main\\resources\\static\\"
+  },
+  "devDependencies": {
+    "sass": "^1.74.1",
+    "vite": "^5.4.2"
+  },
+  "dependencies": {
+    "@passwordless-id/webauthn": "^2.3.0",
+    "@popperjs/core": "^2.11.8",
+    "altcha": "^0.6.7",
+    "bootstrap": "^5.3.3",
+    "bootstrap-icons": "^1.13.1",
+    "chart.js": "^4.5.1",
+    "chartjs-adapter-date-fns": "^3.0.0",
+    "chartjs-plugin-zoom": "^2.2.0",
+    "gridjs": "^6.2.0",
+    "ical": "^0.8.0",
+    "lightningcss": "^1.24.1",
+    "path": "^0.12.7",
+    "sanitize-html": "^2.13.0",
+    "vite-project": "file:"
+  }
+}

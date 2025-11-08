@@ -13,8 +13,17 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.Index;
+import lombok.Getter;
 
+@Getter
 @Entity
+@Table(indexes = {
+        @Index(name = "idx_tausch_user", columnList = "userid"),
+        @Index(name = "idx_tausch_angebot", columnList = "angebot_id"),
+        @Index(name = "idx_tausch_created", columnList = "createdDate")
+})
 public class TauschTermin {
 
     @Id
@@ -39,26 +48,6 @@ public class TauschTermin {
 
     public TauschTermin() {
 
-    }
-
-    public Date getCreatedDate() {
-        return createdDate;
-    }
-
-    public long getUserId() {
-        return userid;
-    }
-
-    public KalenderTermin getAngebot() {
-        return angebot;
-    }
-
-    public List<KalenderTermin> getGesucht() {
-        return gesucht;
-    }
-
-    public long getId() {
-        return id;
     }
 
 }

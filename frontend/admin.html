@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Tauschbörse</title>
+    <link rel="stylesheet" href="./scss/styles.scss">
+    <link rel="stylesheet" href="node_modules/bootstrap-icons/font/bootstrap-icons.css">
+
+
+    <link rel="shortcut icon" href="icon.webp">
+
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+        }
+
+        .sidebar {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding-top: 20px;
+        }
+
+        /* Desktop Sidebar */
+        @media (min-width: 992px) {
+            .sidebar {
+                min-height: 100vh;
+                position: sticky;
+                top: 0;
+                height: 100vh;
+                overflow-y: auto;
+            }
+        }
+
+        .sidebar a {
+            color: #ecf0f1;
+            padding: 12px 20px;
+            display: block;
+            text-decoration: none;
+            border-left: 3px solid transparent;
+            transition: all 0.3s;
+            font-size: 15px;
+        }
+
+        .sidebar a:hover,
+        .sidebar a.active {
+            background-color: #34495e;
+            border-left-color: #3498db;
+            color: #fff;
+        }
+
+        /* Mobile Navigation */
+        @media (max-width: 991px) {
+            .sidebar {
+                display: none;
+            }
+        }
+
+        /* Offcanvas Styling */
+        .offcanvas-start {
+            width: 280px;
+        }
+
+        .offcanvas {
+            background-color: #1f2a34 !important;
+            color: #f1f5f9 !important;
+        }
+
+        .offcanvas-header {
+            background-color: #16202a;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 1.5rem;
+        }
+
+        .offcanvas-title {
+            color: #ecf0f1;
+            font-weight: 600;
+            font-size: 1.25rem;
+        }
+
+        .offcanvas-body {
+            padding: 0 !important;
+        }
+
+        .offcanvas-body a {
+            color: #e2e8f0;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            border-left: 3px solid transparent;
+            transition: all 0.3s;
+            font-size: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .offcanvas-body a:hover {
+            background-color: #2a3a48;
+            border-left-color: #5ac8fa;
+            color: #ffffff;
+            padding-left: 24px;
+        }
+
+        .offcanvas-body a.active {
+            background-color: #2a3a48;
+            border-left-color: #5ac8fa;
+            color: #ffffff;
+        }
+
+        .offcanvas-body a:last-child {
+            border-bottom: none;
+        }
+
+        .offcanvas-body a i {
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .btn-close-white {
+            filter: brightness(0) invert(1);
+        }
+
+        .navbar-mobile {
+            background-color: #1f2a34 !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .navbar-mobile .navbar-brand {
+            color: #f8fafc !important;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .navbar-mobile .navbar-toggler {
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        @media (max-width: 991px) {
+            .offcanvas-body a {
+                padding: 16px 22px;
+                font-size: 16px;
+            }
+
+            .offcanvas-title {
+                color: #f8fafc;
+            }
+        }
+
+
+        .main-content {
+            padding: 30px;
+            box-sizing: border-box;
+        }
+
+        .stat-card {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            border-left: 4px solid #3498db;
+        }
+
+        .stat-card h5 {
+            color: #7f8c8d;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .card {
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border: none;
+        }
+
+        .card-header {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            font-weight: 600;
+        }
+
+        .main-content>.tab-content {
+            display: none;
+        }
+
+        .main-content>.tab-content.active {
+            display: block;
+        }
+
+        .modal-header {
+            background-color: #34495e;
+            color: white;
+        }
+
+        .modal-header .btn-close {
+            filter: brightness(0) invert(1);
+        }
+
+        .gridjs-wrapper {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+
+        .gridjs {
+            --gridjs-border-color: #dee2e6;
+            --gridjs-border: 1px solid var(--gridjs-border-color);
+            --gridjs-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            --gridjs-padding: 10px;
+        }
+
+        .gridjs-tr {
+            height: auto;
+        }
+
+        .gridjs-td,
+        .gridjs-th {
+            padding: 12px 10px;
+            word-wrap: break-word;
+            word-break: break-word;
+            white-space: normal;
+            overflow-wrap: break-word;
+            vertical-align: middle;
+        }
+
+        .gridjs-td {
+            line-height: 1.4;
+        }
+
+        @media (max-width: 768px) {
+
+            .gridjs-td,
+            .gridjs-th {
+                padding: 10px 8px;
+                font-size: 0.85rem;
+            }
+
+            .gridjs-table {
+                font-size: 0.9rem;
+            }
+        }
+
+        .btn-sm-compact {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+
+        .badge-custom {
+            padding: 0.5rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .filter-panel {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Filter Panel Responsive */
+        .filter-panel .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .filter-panel .col-md-4,
+        .filter-panel .col-md-3,
+        .filter-panel .col-md-2 {
+            display: flex;
+            flex-direction: column;
+            flex-basis: auto;
+            min-width: 0;
+        }
+
+        .filter-panel label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 0.35rem;
+            display: block;
+        }
+
+        .filter-panel .form-control,
+        .filter-panel .form-select {
+            margin-bottom: 0;
+        }
+
+        .filter-panel .btn {
+            white-space: nowrap;
+        }
+
+        /* Tablet and mobile optimizations */
+        @media (max-width: 1199px) {
+
+            .filter-panel .col-md-4,
+            .filter-panel .col-md-3,
+            .filter-panel .col-md-2 {
+                flex: 0 1 calc(50% - 7.5px);
+            }
+        }
+
+        @media (max-width: 767px) {
+            .filter-panel {
+                padding: 15px;
+            }
+
+            .filter-panel .row {
+                gap: 12px;
+            }
+
+            .filter-panel .col-md-4,
+            .filter-panel .col-md-3,
+            .filter-panel .col-md-2 {
+                flex: 0 1 100%;
+            }
+
+            .filter-panel .btn {
+                width: 100%;
+            }
+
+            .filter-panel-actions {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .filter-panel-actions .form-check {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+
+            .filter-panel-actions .btn {
+                margin: 0;
+            }
+        }
+
+        #calendarModal .modal-body {
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .bg-danger {
+            background-color: #dc3545 !important;
+        }
+
+        .border-danger {
+            border-color: #dc3545 !important;
+        }
+
+        .border-warning {
+            border-color: #ffc107 !important;
+        }
+
+        .text-warning {
+            color: #ffc107 !important;
+        }
+
+        @media (max-width: 726px) {
+            #settingsActionButtons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Mobile Navbar -->
+            <nav class="navbar navbar-dark navbar-mobile d-lg-none w-100"
+                style="position: sticky; top: 0; z-index: 1030;">
+                <div class="container-fluid">
+                    <span class="navbar-brand mb-0 h1">
+                        <i class="bi bi-speedometer2 me-2"></i>Admin Panel
+                    </span>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas"
+                        data-bs-target="#sidebarOffcanvas" aria-controls="sidebarOffcanvas">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Desktop Sidebar -->
+            <div class="col-lg-2 sidebar d-none d-lg-block">
+                <h4 class="px-3 mb-4">
+                    <i class="bi bi-speedometer2 me-2"></i>Admin Panel
+                </h4>
+                <a href="#" data-tab="overview" class="nav-link active"><i
+                        class="bi bi-speedometer2 me-2"></i><span>Übersicht</span></a>
+                <a href="#" data-tab="users" class="nav-link"><i
+                        class="bi bi-people-fill me-2"></i><span>Benutzer</span></a>
+                <a href="#" data-tab="auditlog" class="nav-link"><i class="bi bi-clipboard-data me-2"></i><span>Audit
+                        Log</span></a>
+                <a href="#" data-tab="statistics" class="nav-link"><i
+                        class="bi bi-graph-up me-2"></i><span>Statistiken</span></a>
+                <a href="#" data-tab="flags" class="nav-link"><i class="bi bi-flag-fill me-2"></i><span>Flags</span></a>
+                <a href="#" data-tab="feedback" class="nav-link"><i
+                        class="bi bi-chat-left-text me-2"></i><span>Feedback</span></a>
+                <a href="#" data-tab="evaluation" class="nav-link"><i
+                        class="bi bi-clipboard-check me-2"></i><span>Evaluation</span></a>
+                <a href="#" data-tab="studiengaenge" class="nav-link"><i
+                        class="bi bi-journal-bookmark me-2"></i><span>Studiengänge</span></a>
+                <a href="#" data-tab="settings" class="nav-link"><i
+                        class="bi bi-gear-fill me-2"></i><span>Einstellungen</span></a>
+                <hr class="bg-secondary my-2 mx-3">
+                <a href="/" class="nav-link"><i class="bi bi-box-arrow-left me-2"></i><span>Zurück zur
+                        Tauschbörse</span></a>
+            </div>
+
+            <!-- Mobile Offcanvas Sidebar -->
+            <div class="offcanvas offcanvas-start" tabindex="-1" id="sidebarOffcanvas"
+                aria-labelledby="sidebarOffcanvasLabel">
+                <div class="offcanvas-header">
+                    <h5 class="offcanvas-title" id="sidebarOffcanvasLabel">
+                        <i class="bi bi-speedometer2 me-2"></i>Admin Panel
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"
+                        aria-label="Close"></button>
+                </div>
+                <div class="offcanvas-body">
+                    <div class="w-100">
+                        <a href="#" data-tab="overview" class="nav-link active"><i
+                                class="bi bi-speedometer2 me-3"></i><span>Übersicht</span></a>
+                        <a href="#" data-tab="users" class="nav-link"><i
+                                class="bi bi-people-fill me-3"></i><span>Benutzer</span></a>
+                        <a href="#" data-tab="auditlog" class="nav-link"><i
+                                class="bi bi-clipboard-data me-3"></i><span>Audit Log</span></a>
+                        <a href="#" data-tab="statistics" class="nav-link"><i
+                                class="bi bi-graph-up me-3"></i><span>Statistiken</span></a>
+                        <a href="#" data-tab="flags" class="nav-link"><i
+                                class="bi bi-flag-fill me-3"></i><span>Flags</span></a>
+                        <a href="#" data-tab="feedback" class="nav-link"><i
+                                class="bi bi-chat-left-text me-3"></i><span>Feedback</span></a>
+                        <a href="#" data-tab="evaluation" class="nav-link"><i
+                                class="bi bi-clipboard-check me-3"></i><span>Evaluation</span></a>
+                        <a href="#" data-tab="studiengaenge" class="nav-link"><i
+                                class="bi bi-journal-bookmark me-3"></i><span>Studiengänge</span></a>
+                        <a href="#" data-tab="settings" class="nav-link"><i
+                                class="bi bi-gear-fill me-3"></i><span>Einstellungen</span></a>
+                        <div style="border-bottom: 1px solid rgba(236, 240, 241, 0.1); margin: 8px 0;"></div>
+                        <a href="/" class="nav-link"><i class="bi bi-box-arrow-left me-3"></i><span>Zurück zur
+                                Tauschbörse</span></a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-10 main-content">
+                <div class="tab-content active" id="overview">
+                    <h2 class="mb-4">Dashboard Übersicht</h2>
+
+                    <div class="row" id="statsContainer">
+                    </div>
+
+                    <div class="row mt-5">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">Benutzer nach Semester</div>
+                                <div class="card-body">
+                                    <canvas id="usersBySemesterChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="tab-content" id="users">
+                    <h2 class="mb-4">Benutzerverwaltung</h2>
+
+                    <div class="filter-panel">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label for="userSearch">HS-Mail</label>
+                                <input type="text" id="userSearch" class="form-control"
+                                    placeholder="Nach HS-Mail suchen...">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="usersSemesterSelect">Semester</label>
+                                <select id="usersSemesterSelect" class="form-select">
+                                    <option value="">-- Alle Semester --</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label>&nbsp;</label>
+                                <button class="btn btn-primary w-100" id="userSearchBtn"><i
+                                        class="bi bi-search me-2"></i>Suchen</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="usersGrid"></div>
+                </div>
+
+                <div class="tab-content" id="auditlog">
+                    <h2 class="mb-4">Audit Log</h2>
+
+                    <div class="filter-panel">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label for="auditUserId">HS-Mail</label>
+                                <input type="email" id="auditUserId" class="form-control" placeholder="Optional">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="auditEventType">Event Type</label>
+                                <select id="auditEventType" class="form-select">
+                                    <option value="">-- Alle --</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="auditSemester">Semester</label>
+                                <select id="auditSemester" class="form-select">
+                                    <option value="">-- Alle --</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="auditStreamInterval">Stream Interval</label>
+                                <select id="auditStreamInterval" class="form-select">
+                                    <option value="">-- Aus --</option>
+                                    <option value="5000">5 Sekunden</option>
+                                    <option value="10000">10 Sekunden</option>
+                                    <option value="30000">30 Sekunden</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-12 filter-panel-actions">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="auditIncludeDebug">
+                                    <label class="form-check-label" for="auditIncludeDebug">Debug anzeigen</label>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                    <button class="btn btn-primary" id="auditFilterBtn"><i
+                                            class="bi bi-funnel me-2"></i>Filter</button>
+                                    <button class="btn btn-success" id="auditStreamStatusBtn" style="display: none;"
+                                        title="Stream aktiv">
+                                        <i class="bi bi-play-circle-fill me-2"></i>Streaming aktiv
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="auditLogsGrid"></div>
+                </div>
+
+                <div class="tab-content" id="statistics">
+                    <h2 class="mb-4">Statistiken</h2>
+
+                    <ul class="nav nav-tabs mb-3" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#semesterStats" data-bs-toggle="tab">Nach Semester</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#timelineStats" data-bs-toggle="tab">Zeitstrahl</a>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <div class="tab-pane visible active show" id="semesterStats">
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <select id="semesterSelect" class="form-control">
+                                        <option value="">-- Semester auswählen --</option>
+                                    </select>
+                                </div>
+                                <br><br>
+                                <div class="col-md-2">
+                                    <button class="btn btn-primary" id="semesterLoadBtn">Laden</button>
+                                </div>
+                            </div>
+                            <div id="semesterStatsContainer"></div>
+                        </div>
+
+                        <div class="tab-pane fade" id="timelineStats">
+                            <div class="row g-3 mb-3 align-items-end">
+                                <div class="col-md-3">
+                                    <label>Semester</label>
+                                    <select id="timelineSemesterSelect" class="form-control">
+                                        <option value="">-- Semester auswählen --</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label id="timelineRangeLabel">Zeitraum</label>
+                                    <div class="d-flex gap-2">
+                                        <input type="date" id="timelineStart" class="form-control">
+                                        <input type="date" id="timelineEnd" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <label>Granularität</label>
+                                    <select id="timelineInterval" class="form-control">
+                                        <option value="day">Tage</option>
+                                        <option value="hour">Stunden</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <button class="btn btn-primary" id="timelineLoadBtn">Laden</button>
+                                </div>
+                            </div>
+                            <div class="card">
+                                <div class="card-body" id="timelineChartBody">
+                                    <canvas id="timelineChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="flags">
+                    <h2 class="mb-5">User Flags</h2>
+
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">Flags nach Semester</div>
+                                <div class="card-body">
+                                    <div class="row g-3 align-items-end mb-3">
+                                        <div class="col-md-6">
+                                            <label>Semester</label>
+                                            <select id="flagsSemesterSelect" class="form-control">
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6 text-end">
+                                            <span class="badge bg-secondary">Nutzer gesamt: <span
+                                                    id="flagsTotalUsers">-</span></span>
+                                        </div>
+                                    </div>
+                                    <canvas id="flagsBySemesterChart"></canvas>
+
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">Flag-Details nach Semester</div>
+                                <div id="flagsDetailsGrid"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="feedback">
+                    <h2 class="mb-4">Feedback-Verwaltung</h2>
+
+                    <div id="feedbackGrid"></div>
+                </div>
+
+                <div class="tab-content" id="evaluation">
+                    <h2 class="mb-4">Evaluation</h2>
+
+                    <!-- Semester Selector -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="bi bi-calendar3 me-2"></i>Semester-Auswahl
+                        </div>
+                        <div class="card-body">
+                            <div class="row align-items-end">
+                                <div class="col-md-4">
+                                    <label for="evalSemesterSelect" class="form-label">Semester</label>
+                                    <select class="form-select" id="evalSemesterSelect">
+                                        <option value="">Lade Semester...</option>
+                                    </select>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Statistics Overview -->
+                    <div class="card mb-3" id="evalStatsCard" style="display: none;">
+                        <div class="card-header">
+                            <i class="bi bi-graph-up me-2"></i>Teilnahmestatistik
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-4">
+                                    <h3 class="text-primary" id="evalTotalResponses">-</h3>
+                                    <p class="text-muted mb-0">Gesamt Antworten</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <h3 class="text-success" id="evalCompleteResponses">-</h3>
+                                    <p class="text-muted mb-0">Vollständig</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <h3 class="text-warning" id="evalPartialResponses">-</h3>
+                                    <p class="text-muted mb-0">Unvollständig</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Results View (Active Semester) -->
+                    <div id="evalResultsView" style="display: none;">
+                        <div class="card mb-4">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-bar-chart me-2"></i>Evaluationsergebnisse</span>
+                                <button class="btn btn-sm btn-primary" id="exportEvalResultsBtn">
+                                    <i class="bi bi-download me-1"></i>Exportieren
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <!-- Tabs for different question categories -->
+                                <ul class="nav nav-tabs mb-3" id="evalResultsTabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" id="general-tab" data-bs-toggle="tab"
+                                            data-bs-target="#general" type="button" role="tab">
+                                            Allgemeine Nutzung
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="usability-tab" data-bs-toggle="tab"
+                                            data-bs-target="#usability" type="button" role="tab">
+                                            Benutzerfreundlichkeit
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="roundexchange-tab" data-bs-toggle="tab"
+                                            data-bs-target="#roundexchange" type="button" role="tab">
+                                            Rundentausch
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="satisfaction-tab" data-bs-toggle="tab"
+                                            data-bs-target="#satisfaction" type="button" role="tab">
+                                            Gesamtzufriedenheit
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="feedback-tab" data-bs-toggle="tab"
+                                            data-bs-target="#feedbacktext" type="button" role="tab">
+                                            Freitextfeedback
+                                        </button>
+                                    </li>
+                                </ul>
+
+                                <div class="tab-content" id="evalResultsTabContent">
+                                    <div class="tab-pane fade show active" id="general" role="tabpanel">
+                                        <div id="generalResults">Lade Ergebnisse...</div>
+                                    </div>
+                                    <div class="tab-pane fade" id="usability" role="tabpanel">
+                                        <div id="usabilityResults">Lade Ergebnisse...</div>
+                                    </div>
+                                    <div class="tab-pane fade" id="roundexchange" role="tabpanel">
+                                        <div id="roundexchangeResults">Lade Ergebnisse...</div>
+                                    </div>
+                                    <div class="tab-pane fade" id="satisfaction" role="tabpanel">
+                                        <div id="satisfactionResults">Lade Ergebnisse...</div>
+                                    </div>
+                                    <div class="tab-pane fade" id="feedbacktext" role="tabpanel">
+                                        <div id="feedbacktextResults">Lade Freitextantworten...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- No Semester Selected -->
+                    <div id="evalNoSelection" class="">
+
+                    </div>
+                </div>
+
+                <div class="tab-content" id="studiengaenge">
+                    <h2 class="mb-4">Studiengänge & NOT_SHARED</h2>
+
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-journal-bookmark me-2"></i>Studiengänge verwalten</span>
+                            <button class="btn btn-sm btn-primary" id="sgAddBtn"><i
+                                    class="bi bi-plus-lg me-1"></i>Neu</button>
+                        </div>
+                        <div class="card-body">
+                            <div id="studiengaengeGrid"></div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header"><i class="bi bi-slash-circle me-2"></i>NOT_SHARED je Studiengang</div>
+                        <div class="card-body">
+                            <div class="row g-2 align-items-end mb-3">
+                                <div class="col-md-6">
+                                    <label for="sgSelect" class="form-label">Studiengang</label>
+                                    <select class="form-select" id="sgSelect">
+                                        <option value="">– auswählen –</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="notSharedAddInput" class="form-label">Veranstaltungsbasisname
+                                        hinzufügen</label>
+                                    <div class="input-group">
+                                        <input class="form-control" id="notSharedAddInput" placeholder="z.B. DS">
+                                        <button class="btn btn-outline-primary" id="notSharedAddBtn">Hinzufügen</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Verfügbare Kürzel Analyse -->
+                            <div id="kurzelAnalysisContainer" style="display: none;">
+                                <hr class="my-3">
+                                <div class="mb-3">
+                                    <h6 class="mb-2"><i class="bi bi-list-check me-2"></i>Alle verfügbaren Kürzel <small
+                                            class="text-muted">(klicken zum hinzufügen)</small></h6>
+                                    <div id="allKurzelBadges" class="d-flex flex-wrap gap-2"></div>
+                                </div>
+                                <div class="mb-3">
+                                    <h6 class="mb-2"><i class="bi bi-shield-check me-2"></i>NOT_SHARED Kürzel für diesen
+                                        Studiengang</h6>
+                                    <div id="notSharedKurzelBadges" class="d-flex flex-wrap gap-2"></div>
+                                </div>
+                                <hr class="my-3">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="settings">
+                    <h2 class="mb-4">Einstellungen</h2>
+
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="bi bi-gear-fill me-2"></i>System-Modus & Matching-Zeitplan
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="systemMode" class="form-label">System-Modus</label>
+                                    <select class="form-select" id="systemMode">
+                                        <option value="DIRECT">Direkttausch</option>
+                                        <option value="POOLED_3CYCLE">3er-Zirkeltausch</option>
+                                    </select>
+                                    <small class="text-muted">
+                                        <strong>Direkttausch:</strong> Angebote werden live angezeigt.<br>
+                                        <strong>3er-Zirkeltausch:</strong> System sammelt Wünsche und vermittelt in
+                                        Runden.
+                                    </small>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Backend-Systemzeit</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="systemTimezone" readonly>
+                                        <span class="input-group-text" id="systemTime">--:--:--</span>
+                                    </div>
+                                    <small class="text-muted">Aktuelle Zeit auf dem Server</small>
+                                </div>
+                            </div>
+
+                            <div id="scheduleSettings" style="display: none;">
+                                <hr class="my-3">
+                                <h6 class="mb-3">Matching-Zeitplan (nur für 3er-Zirkeltausch)</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label for="scheduleType" class="form-label">Zeitplan-Typ</label>
+                                        <select class="form-select" id="scheduleType">
+                                            <option value="">-- Bitte wählen --</option>
+                                            <option value="INTERVAL_HOURS">Intervall (alle X Stunden)</option>
+                                            <option value="DAILY_FIXED">Täglich zu fester Uhrzeit</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6" id="intervalHoursField" style="display: none;">
+                                        <label for="intervalHours" class="form-label">Intervall (Stunden)</label>
+                                        <input type="number" class="form-control" id="intervalHours" min="1" max="168"
+                                            placeholder="z.B. 24">
+                                        <small class="text-muted">Matching läuft alle X Stunden</small>
+                                    </div>
+                                    <div class="col-md-6" id="dailyTimeField" style="display: none;">
+                                        <label for="dailyTime" class="form-label">Uhrzeit (HH:mm)</label>
+                                        <input type="time" class="form-control" id="dailyTime">
+                                        <small class="text-muted">Matching läuft täglich um diese Uhrzeit</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="my-3">
+                            <div class="d-flex gap-2" id="settingsActionButtons">
+                                <button class="btn btn-primary" id="saveSettingsBtn">
+                                    <i class="bi bi-save me-2"></i>Einstellungen speichern
+                                </button>
+                                <button class="btn btn-outline-info" id="whatIfBtn">
+                                    <i class="bi bi-calculator me-2"></i>What-If berechnen
+                                </button>
+                                <button class="btn btn-success" id="runMatchingBtn" disabled>
+                                    <i class="bi bi-play-fill me-2"></i>Matching jetzt starten
+                                </button>
+                            </div>
+
+                            <div id="matchingResult" class="mt-3" style="display: none;">
+                                <div class="alert alert-info">
+                                    <h6 class="mb-2"><i class="bi bi-info-circle me-2"></i>Matching-Ergebnis</h6>
+                                    <div class="row g-2">
+                                        <div class="col-md-3">
+                                            <strong>2er-Matches:</strong> <span id="twoWayCount">-</span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <strong>3er-Matches:</strong> <span id="threeWayCount">-</span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <strong>Personen gesamt:</strong> <span id="totalPersons">-</span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <strong>Rechenzeit:</strong> <span id="computationTime">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="settingsAlert" class="alert mt-3" style="display: none;"></div>
+                        </div>
+                    </div>
+
+                    <div class="card border-danger">
+                        <div class="card-header bg-danger text-white">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>Danger Zone
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-4">Vorsicht: Die folgenden Aktionen können nicht rückgängig gemacht
+                                werden.</p>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="card border-warning">
+                                        <div class="card-body">
+                                            <h5 class="card-title">
+                                                <i class="bi bi-calendar-x me-2 text-warning"></i>Alle Kalender löschen
+                                            </h5>
+                                            <p class="card-text small text-muted mb-3">Löscht alle hochgeladenen
+                                                Kalender aller Benutzer. Ideal zur Vorbereitung auf ein neues Semester.
+                                            </p>
+                                            <button class="btn btn-warning btn-sm" id="deleteAllCalendarsBtn">
+                                                <i class="bi bi-trash me-2"></i>Alle Kalender löschen
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="card border-warning">
+                                        <div class="card-body">
+                                            <h5 class="card-title">
+                                                <i class="bi bi-flag-fill me-2 text-warning"></i>Alle Flags zurücksetzen
+                                            </h5>
+                                            <p class="card-text small text-muted mb-3">Setzt alle Flags (Kalender &
+                                                Angebote) für alle Benutzer zurück. Perfekt für einen Neustart des
+                                                Semesters.</p>
+                                            <button class="btn btn-warning btn-sm" id="resetAllFlagsBtn">
+                                                <i class="bi bi-arrow-counterclockwise me-2"></i>Alle Flags zurücksetzen
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="calendarModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Benutzerkalender - <span id="calendarUserId"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="calendarContent">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Laden...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="userMetricsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Metriken für Benutzer <span id="metricsUserId"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="metricsContent">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="stat-card">
+                                    <h5>Flags</h5>
+                                    <ul id="metricsFlags" class="mb-0"></ul>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="stat-card">
+                                    <h5>Zähler</h5>
+                                    <ul id="metricsCounts" class="mb-0"></ul>
+                                </div>
+                            </div>
+                        </div>
+                        <hr />
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="stat-card">
+                                    <h5>Erste Ereignisse</h5>
+                                    <ul id="metricsFirsts" class="mb-0"></ul>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="stat-card">
+                                    <h5>Zuletzt</h5>
+                                    <ul id="metricsLasts" class="mb-0"></ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/admin.js"></script>
+</body>
+
+</html>
